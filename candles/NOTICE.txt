@@ -1,0 +1,4 @@
+Copyright 2026 the OpenCandle contributors.
+Existing PolyForm Noncommercial 1.0.0 terms apply; see LICENSE.txt.
+Original educational text and diagrams. Pattern naming references are linked in the guide.
+This website publishes selected aggregate statistics, not the private research workspace or market-data files.
