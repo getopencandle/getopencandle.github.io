@@ -99,7 +99,7 @@ const CANDLE_FAMILIES                        =Object.freeze([
  {id:'invhammer',size:1,role:'reversal',definition:'Not a doji; upper shadow at least longShadowBodies bodies; lower shadow at most smallShadow of the range. After a downtrend it is an Inverted hammer, after an uptrend a Shooting star.',
   bullish:side('IH','Inverted hammer',(k,i)=>!k.doji(i)&&k.upper[i]>=T.longShadowBodies*k.body[i]&&k.lower[i]<=T.smallShadow*k.range[i]),
   bearish:side('SS','Shooting star',(k,i)=>!k.doji(i)&&k.upper[i]>=T.longShadowBodies*k.body[i]&&k.lower[i]<=T.smallShadow*k.range[i])},
- {id:'engulfing',size:2,role:'reversal',definition:'The second real body covers the first and is larger: bullish = black then white with open <= prior close and close >= prior open; bearish mirrors it.',
+ {id:'engulfing',size:2,role:'reversal',definition:'The second real body covers the first and is larger. Bullish engulfing: a black body, then a larger white body opening at or below the prior close and closing at or above the prior open. Bearish engulfing: a white body, then a larger black body opening at or above the prior close and closing at or below the prior open.',
   bullish:side('EG','Bullish engulfing',(k,i)=>k.black(i-1)&&k.white(i)&&k.o[i]<=k.c[i-1]&&k.c[i]>=k.o[i-1]&&k.body[i]>k.body[i-1]),
   bearish:side('EG','Bearish engulfing',(k,i)=>k.white(i-1)&&k.black(i)&&k.o[i]>=k.c[i-1]&&k.c[i]<=k.o[i-1]&&k.body[i]>k.body[i-1])},
  {id:'harami',size:2,role:'reversal',definition:'A long first body, then a small non-doji body of either color inside it (Nison: a small real body; here at most shortBody of the average body, as TA-Lib BodyShort). The first body color gives the direction (black = bullish).',
@@ -110,25 +110,25 @@ const CANDLE_FAMILIES                        =Object.freeze([
   bearish:side('HC','Bearish harami cross',(k,i)=>k.white(i-1)&&k.long(i-1)&&k.doji(i)&&insideBody(k,i,i-1))},
  
  
- {id:'piercing',size:2,role:'reversal',definition:'Piercing: a long black body, then a white body opening below its low and closing above its midpoint but below its open. Dark cloud cover mirrors it (opening above the prior high).',
+ {id:'piercing',size:2,role:'reversal',definition:'Piercing: a long black body, then a white body opening below its low and closing above its midpoint but below its open. Dark cloud cover: a long white body, then a black body opening above its high and closing below its midpoint but above its open.',
   bullish:side('PL','Piercing',(k,i)=>k.black(i-1)&&k.long(i-1)&&k.white(i)&&k.o[i]<k.l[i-1]&&k.c[i]>k.mid(i-1)&&k.c[i]<k.o[i-1]),
   bearish:side('DC','Dark cloud cover',(k,i)=>k.white(i-1)&&k.long(i-1)&&k.black(i)&&k.o[i]>k.h[i-1]&&k.c[i]<k.mid(i-1)&&k.c[i]>k.o[i-1])},
  {id:'dojistar',size:2,role:'reversal',definition:'A long body, then a doji whose body gaps beyond its close (below after black = bullish, above after white = bearish).',
   bullish:side('DS','Bullish doji star',(k,i)=>k.black(i-1)&&k.long(i-1)&&k.doji(i)&&k.top(i)<k.c[i-1]),
   bearish:side('DS','Bearish doji star',(k,i)=>k.white(i-1)&&k.long(i-1)&&k.doji(i)&&k.bottom(i)>k.c[i-1])},
- {id:'star',size:3,role:'reversal',definition:'Morning star: a long black body, a small non-doji body gapping below its close, then a white body closing above the first body\'s midpoint. Evening star mirrors it.',
+ {id:'star',size:3,role:'reversal',definition:'Morning star: a long black body, a small non-doji body gapping below its close, then a white body closing above the first body\'s midpoint. Evening star: a long white body, a small non-doji body gapping above its close, then a black body closing below the first body\'s midpoint.',
   bullish:side('MS','Morning star',(k,i)=>k.black(i-2)&&k.long(i-2)&&k.small(i-1)&&!k.doji(i-1)&&k.top(i-1)<k.c[i-2]&&k.white(i)&&k.c[i]>k.mid(i-2)),
   bearish:side('ES','Evening star',(k,i)=>k.white(i-2)&&k.long(i-2)&&k.small(i-1)&&!k.doji(i-1)&&k.bottom(i-1)>k.c[i-2]&&k.black(i)&&k.c[i]<k.mid(i-2))},
- {id:'dojistar3',size:3,role:'reversal',definition:'Morning Doji star and Evening Doji star: the star pattern with a doji as the middle bar.',
+ {id:'dojistar3',size:3,role:'reversal',definition:'Morning Doji star: a long black body, a doji whose body gaps below its close, then a white body closing above the first body\'s midpoint. Evening Doji star: a long white body, a doji whose body gaps above its close, then a black body closing below the first body\'s midpoint.',
   bullish:side('MDS','Morning Doji star',(k,i)=>k.black(i-2)&&k.long(i-2)&&k.doji(i-1)&&k.top(i-1)<k.c[i-2]&&k.white(i)&&k.c[i]>k.mid(i-2)),
   bearish:side('EDS','Evening Doji star',(k,i)=>k.white(i-2)&&k.long(i-2)&&k.doji(i-1)&&k.bottom(i-1)>k.c[i-2]&&k.black(i)&&k.c[i]<k.mid(i-2))},
  
  
  
- {id:'abandoned',size:3,role:'reversal',definition:'A long body, a doji whose whole range gaps away from both neighbours, then an opposite body that is not small and closes at least abandonedPenetration into the first body: long black, gap-down doji, gap-up white = bullish; the mirror is bearish.',
+ {id:'abandoned',size:3,role:'reversal',definition:'Bullish abandoned baby: a long black body, a doji whose whole range gaps below it, then a white body whose whole range gaps above the doji, that is not small and closes at least abandonedPenetration into the first body. Bearish abandoned baby: a long white body, a doji whose whole range gaps above it, then a black body whose whole range gaps below the doji, that is not small and closes at least abandonedPenetration into the first body.',
   bullish:side('AB','Bullish abandoned baby',(k,i)=>k.black(i-2)&&k.long(i-2)&&k.doji(i-1)&&k.h[i-1]<k.l[i-2]&&k.white(i)&&!k.small(i)&&k.l[i]>k.h[i-1]&&k.c[i]>k.c[i-2]+T.abandonedPenetration*k.body[i-2]),
   bearish:side('AB','Bearish abandoned baby',(k,i)=>k.white(i-2)&&k.long(i-2)&&k.doji(i-1)&&k.l[i-1]>k.h[i-2]&&k.black(i)&&!k.small(i)&&k.h[i]<k.l[i-1]&&k.c[i]<k.c[i-2]-T.abandonedPenetration*k.body[i-2])},
- {id:'soldiers',size:3,role:'reversal',definition:'Three long white bodies, each closing higher, each opening inside the prior body, each with an upper shadow at most nearExtreme of its range. Three black crows mirror it.',
+ {id:'soldiers',size:3,role:'reversal',definition:'Three white soldiers: three long white bodies, each closing higher, each opening inside the prior body, each with an upper shadow at most nearExtreme of its range. Three black crows: three long black bodies, each closing lower, each opening inside the prior body, each with a lower shadow at most nearExtreme of its range.',
   bullish:side('3WS','Three white soldiers',(k,i)=>[i-2,i-1,i].every(j=>soldier(k,j))&&k.c[i-1]>k.c[i-2]&&k.c[i]>k.c[i-1]&&k.o[i-1]>k.o[i-2]&&k.o[i-1]<=k.c[i-2]&&k.o[i]>k.o[i-1]&&k.o[i]<=k.c[i-1]),
   bearish:side('3BC','Three black crows',(k,i)=>[i-2,i-1,i].every(j=>crow(k,j))&&k.c[i-1]<k.c[i-2]&&k.c[i]<k.c[i-1]&&k.o[i-1]<k.o[i-2]&&k.o[i-1]>=k.c[i-2]&&k.o[i]<k.o[i-1]&&k.o[i]>=k.c[i-1])},
  
@@ -149,19 +149,19 @@ const CANDLE_FAMILIES                        =Object.freeze([
  {id:'kicking',size:2,role:'none',definition:'Two marubozu of opposite color with a gap between their ranges: black then gap-up white = bullish; white then gap-down black = bearish. The prior trend is not required.',
   bullish:side('K','Bullish kicking',(k,i)=>k.black(i-1)&&k.marubozu(i-1)&&k.white(i)&&k.marubozu(i)&&k.l[i]>k.h[i-1]),
   bearish:side('K','Bearish kicking',(k,i)=>k.white(i-1)&&k.marubozu(i-1)&&k.black(i)&&k.marubozu(i)&&k.h[i]<k.l[i-1])},
- {id:'threemethods',size:5,role:'continuation',definition:'Rising three methods: a long white bar, three bars with small real bodies (Nison; here at most shortBody of the average body, as TA-Lib BodyShort, and smaller than the first body) inside its range, then a long white bar closing above the first close. Falling three methods mirrors it.',
+ {id:'threemethods',size:5,role:'continuation',definition:'Rising three methods: a long white bar, three bars with small real bodies (Nison; here at most shortBody of the average body, as TA-Lib BodyShort, and smaller than the first body) inside its range, then a long white bar closing above the first close. Falling three methods: a long black bar, three bars with small real bodies (at most shortBody of the average body and smaller than the first body) inside its range, then a long black bar closing below the first close. In both, the fifth bar\'s open is not constrained.',
   bullish:side('R3M','Rising three methods',(k,i)=>k.white(i-4)&&k.long(i-4)&&[i-3,i-2,i-1].every(j=>k.h[j]<=k.h[i-4]&&k.l[j]>=k.l[i-4]&&k.short(j)&&k.body[j]<k.body[i-4])&&k.white(i)&&k.long(i)&&k.c[i]>k.c[i-4]),
   bearish:side('F3M','Falling three methods',(k,i)=>k.black(i-4)&&k.long(i-4)&&[i-3,i-2,i-1].every(j=>k.h[j]<=k.h[i-4]&&k.l[j]>=k.l[i-4]&&k.short(j)&&k.body[j]<k.body[i-4])&&k.black(i)&&k.long(i)&&k.c[i]<k.c[i-4])},
  {id:'tristar',size:3,role:'reversal',definition:'Three dojis whose middle body gaps below both neighbours (bullish) or above both (bearish).',
   bullish:side('TS','Bullish tri-star',(k,i)=>k.doji(i-2)&&k.doji(i-1)&&k.doji(i)&&k.top(i-1)<k.bottom(i-2)&&k.top(i-1)<k.bottom(i)),
   bearish:side('TS','Bearish tri-star',(k,i)=>k.doji(i-2)&&k.doji(i-1)&&k.doji(i)&&k.bottom(i-1)>k.top(i-2)&&k.bottom(i-1)>k.top(i))},
- {id:'tasuki',size:3,role:'continuation',definition:'Upside Tasuki gap: two white bars with a gap up between their ranges, then a black bar opening inside the second body and closing inside the gap. Downside Tasuki gap mirrors it.',
+ {id:'tasuki',size:3,role:'continuation',definition:'Upside Tasuki gap: two white bars with a gap up between their ranges, then a black bar opening inside the second body and closing inside the gap. Downside Tasuki gap: two black bars with a gap down between their ranges, then a white bar opening inside the second body and closing inside the gap.',
   bullish:side('UTG','Upside Tasuki gap',(k,i)=>k.white(i-2)&&k.white(i-1)&&k.l[i-1]>k.h[i-2]&&k.black(i)&&k.o[i]<k.c[i-1]&&k.o[i]>k.o[i-1]&&k.c[i]<k.l[i-1]&&k.c[i]>k.h[i-2]),
   bearish:side('DTG','Downside Tasuki gap',(k,i)=>k.black(i-2)&&k.black(i-1)&&k.h[i-1]<k.l[i-2]&&k.white(i)&&k.o[i]>k.c[i-1]&&k.o[i]<k.o[i-1]&&k.c[i]>k.h[i-1]&&k.c[i]<k.l[i-2])},
  {id:'window',size:2,role:'continuation',definition:'Rising window: the low is above the prior high. Falling window: the high is below the prior low.',
   bullish:side('RW','Rising window',(k,i)=>k.l[i]>k.h[i-1]),
   bearish:side('FW','Falling window',(k,i)=>k.h[i]<k.l[i-1])},
- {id:'shadow',size:1,role:'reversal',definition:'Long lower shadow: the lower shadow is at least longShadowRange of the range. Long upper shadow: the upper shadow is.',
+ {id:'shadow',size:1,role:'reversal',definition:'Long lower shadow: the lower shadow is at least longShadowRange of the range. Long upper shadow: the upper shadow is at least longShadowRange of the range.',
   bullish:side('LLS','Long lower shadow',(k,i)=>k.lower[i]>=T.longShadowRange*k.range[i]),
   bearish:side('LUS','Long upper shadow',(k,i)=>k.upper[i]>=T.longShadowRange*k.range[i])},
  {id:'onneck',size:2,role:'continuation',definition:'On neck: a long black bar, then a white bar opening below its low and closing at its low (within matchTolerance of its range).',
@@ -220,10 +220,10 @@ const CHART_PATTERNS                            =Object.freeze([
  {id:'triplebottom',name:'Triple bottom',direction:'bullish',rule:'Three lows within tolerance of each other, both highs between them above the highest low by more than tolerance.'},
  {id:'headshoulders',name:'Head and shoulders',direction:'bearish',rule:'Five pivots high, low, high, low, high: the middle high (head) above both outer highs (shoulders) by more than tolerance, the shoulders equal within tolerance, both lows below the lower shoulder.'},
  {id:'invheadshoulders',name:'Inverted head and shoulders',direction:'bullish',rule:'The mirror of Head and shoulders on lows.'},
- {id:'triangle',name:'Triangle',direction:'neutral',rule:'Last two highs and last two lows: highs not rising and lows not falling (a move within tolerance is flat), not both flat, and the second high-low width narrower than the first.'},
+ {id:'triangle',name:'Triangle',direction:'neutral',rule:'Last two highs and last two lows: highs not rising and lows not falling (a move within tolerance is flat), not both flat, and the gap between the two trend lines, read at one bar, narrower at the last pivot bar than at the first and still open.'},
  {id:'rectangle',name:'Rectangle',direction:'neutral',rule:'Last two highs equal within tolerance and last two lows equal within tolerance, the lows below the highs by more than tolerance.'},
- {id:'risingwedge',name:'Rising wedge',direction:'bearish',rule:'Last two highs and lows both rising by more than tolerance, lows rising faster (the width narrows).'},
- {id:'fallingwedge',name:'Falling wedge',direction:'bullish',rule:'Last two highs and lows both falling by more than tolerance, highs falling faster (the width narrows).'},
+ {id:'risingwedge',name:'Rising wedge',direction:'bearish',rule:'Last two highs and lows both rising by more than tolerance, the gap between the two trend lines, read at one bar, narrower at the last pivot bar than at the first and still open (the width narrows).'},
+ {id:'fallingwedge',name:'Falling wedge',direction:'bullish',rule:'Last two highs and lows both falling by more than tolerance, the gap between the two trend lines, read at one bar, narrower at the last pivot bar than at the first and still open (the width narrows).'},
  
  {id:'bullflag',name:'Bullish flag',direction:'bullish',rule:'Five pivots low, high, low, high, low: the pole (first low to first high) rises by more than 3 x tolerance; both later lows stay above the pole midpoint; the flag highs and lows are each flat or falling (neither rises by more than tolerance) and the second high-low width is at least half the first (parallel, not converging).'},
  {id:'bearflag',name:'Bearish flag',direction:'bearish',rule:'The mirror of Bullish flag: a falling pole (high to low) of more than 3 x tolerance, both later highs below the pole midpoint, the flag highs and lows each flat or rising, the second width at least half the first.'},
@@ -234,6 +234,7 @@ const CHART_PATTERNS                            =Object.freeze([
  {id:'invcuphandle',name:'Inverted cup and handle',direction:'bearish',rule:'The mirror of Cup and handle on lows: two equal low rims, a rounded dome (at least 40% of the bars with their high in the top quarter), a handle high below the dome midpoint, lasting at most half the dome.'},
 ]                      );
 const chartPatternInfo=(id               )                 =>CHART_PATTERNS.find(row=>row.id===id) ;
+
 
 
 
@@ -267,6 +268,8 @@ function zigzagPivots(bars               ,length       )        {
 const equal=(a       ,b       ,tol       )=>Math.abs(a-b)<=tol*Math.max(Math.abs(a),Math.abs(b));
 const segment=(a      ,b      )=>({from:{index:a.index,price:a.price},to:{index:b.index,price:b.price}});
  
+const flatLine=(a      ,at       )=>({from:{index:a.index,price:a.price},to:{index:at,price:a.price}});
+ 
 const extended=(a      ,b      ,at       )=>{const slope=b.index===a.index?0:(b.price-a.price)/(b.index-a.index);return {from:{index:a.index,price:a.price},to:{index:at,price:b.price+slope*(at-b.index)}};};
 
  
@@ -277,15 +280,35 @@ function roundShare(bars               ,a       ,c       ,bottom       ,depth   
  return near/(c-a+1);
 }
 
-function test(id               ,p                 ,tol       ,at       ,bars               )                     {
+
+
+const TEXTBOOK_RULES=Object.freeze({ doubleDepth:0.10, doubleBars:10, spanBars:15});
+const TEXTBOOK_EPS=1e-9;
+ 
+function chartBarsAreDaily(bars               )        {
+ const gaps         =[];for(let k=1;k<bars.length;k++){const gap=bars[k].time-bars[k-1].time;if(Number.isFinite(gap)&&gap>0)gaps.push(gap);}
+ if(!gaps.length)return false;gaps.sort((a,b)=>a-b);const mid=gaps.length>>1;
+ return (gaps.length%2?gaps[mid]:(gaps[mid-1]+gaps[mid])/2)>=72000;
+}
+
+
+function priorTrend(bars               ,first       ,high       ,low       )                 {
+ for(let k=first-1;k>=0;k--){const below=bars[k].low<low,above=bars[k].high>high;if(below&&above)return null;if(below)return 'up';if(above)return 'down';}
+ return null;
+}
+
+function test(id               ,p                 ,tol       ,at       ,bars               ,textbook=false)                     {
  const n=p.length,info=chartPatternInfo(id);
  const hit=(pivots                 ,lines                         )                =>({id,direction:info.direction,name:info.name,confirmedAt:at,pivots,lines});
  const zigzag=(pivots                 )=>pivots.slice(1).map((pivot,k)=>segment(pivots[k],pivot));
  const last=p[n-1];
+  
+ const trended=(pivots                 ,top        )=>priorTrend(bars,pivots[0].index,Math.max(...pivots.map(row=>row.price)),Math.min(...pivots.map(row=>row.price)))===(top?'up':'down');
  if(id==='doubletop'||id==='doublebottom'){
   if(n<3)return null;const [a,b,c]=p.slice(n-3);const top=id==='doubletop';if(c.kind!==(top?'high':'low'))return null;
   if(!equal(a.price,c.price,tol))return null;
   const ok=top?b.price<Math.min(a.price,c.price)*(1-tol):b.price>Math.max(a.price,c.price)*(1+tol);if(!ok)return null;
+  if(textbook&&(!((top?a.price-b.price:b.price-a.price)/a.price>=TEXTBOOK_RULES.doubleDepth-TEXTBOOK_EPS)||c.index-a.index<TEXTBOOK_RULES.doubleBars||!trended([a,b,c],top)))return null;
   return hit([a,b,c],[...zigzag([a,b,c]),{from:{index:b.index,price:b.price},to:{index:at,price:b.price}}]);
  }
  if(id==='tripletop'||id==='triplebottom'){
@@ -293,13 +316,17 @@ function test(id               ,p                 ,tol       ,at       ,bars    
   const peaks=[q[0],q[2],q[4]].map(row=>row.price),valleys=[q[1],q[3]].map(row=>row.price);
   const hi=Math.max(...peaks),lo=Math.min(...peaks);if(hi-lo>tol*Math.max(Math.abs(hi),Math.abs(lo)))return null;
   const ok=top?valleys.every(v=>v<lo*(1-tol)):valleys.every(v=>v>hi*(1+tol));if(!ok)return null;
-  return hit(q,[...zigzag(q),extended(q[1],q[3],at)]);
+  if(textbook&&!trended(q,top))return null;
+  
+  const key=top?(q[1].price<=q[3].price?q[1]:q[3]):(q[1].price>=q[3].price?q[1]:q[3]);
+  return hit(q,[...zigzag(q),flatLine(key,at)]);
  }
  if(id==='headshoulders'||id==='invheadshoulders'){
   if(n<5)return null;const q=p.slice(n-5),top=id==='headshoulders';if(last.kind!==(top?'high':'low'))return null;
   const [ls,t1,head,t2,rs]=q;if(!equal(ls.price,rs.price,tol))return null;
   if(top?!(head.price>Math.max(ls.price,rs.price)*(1+tol)):!(head.price<Math.min(ls.price,rs.price)*(1-tol)))return null;
   if(top?!(Math.max(t1.price,t2.price)<Math.min(ls.price,rs.price)):!(Math.min(t1.price,t2.price)>Math.max(ls.price,rs.price)))return null;
+  if(textbook&&!trended(q,top))return null;
   return hit(q,[...zigzag(q),extended(t1,t2,at)]);
  }
  if(id==='bullflag'||id==='bearflag'||id==='bullpennant'||id==='bearpennant'){
@@ -324,61 +351,123 @@ function test(id               ,p                 ,tol       ,at       ,bars    
   const mid=cup?b.price+depth/2:b.price-depth/2;if(cup?!(d.price>mid):!(d.price<mid))return null;
   if(d.index-c.index>(c.index-a.index)/2)return null;
   const share=roundShare(bars,a.index,c.index,b.price,depth,!cup);if(share===null||share<CUP_ROUND_SHARE)return null;
-  return hit(q,[...zigzag(q),extended(a,c,at)]);
+  
+  const rimPivot=cup?(a.price>=c.price?a:c):(a.price<=c.price?a:c);
+  return hit(q,[...zigzag(q),flatLine(rimPivot,at)]);
  }
  
  if(n<4)return null;const q=p.slice(n-4),highs=q.filter(row=>row.kind==='high'),lows=q.filter(row=>row.kind==='low');
  if(highs.length!==2||lows.length!==2)return null;
  const [h1,h2]=highs,[l1,l2]=lows,dh=(h2.price-h1.price)/Math.abs(h1.price),dl=(l2.price-l1.price)/Math.abs(l1.price);
  if(!finite(dh)||!finite(dl))return null;
- const flatHigh=Math.abs(dh)<=tol,flatLow=Math.abs(dl)<=tol,narrower=h2.price-l2.price<h1.price-l1.price;
+ const flatHigh=Math.abs(dh)<=tol,flatLow=Math.abs(dl)<=tol;
+ 
+ 
+ const upper=lineAt(h1,h2),lower=lineAt(l1,l2),f=q[0].index,end=q[3].index,gapStart=upper(f)-lower(f),gapEnd=upper(end)-lower(end),narrower=gapEnd<gapStart&&gapEnd>0;
  let ok=false;
  if(id==='rectangle')ok=flatHigh&&flatLow&&Math.max(l1.price,l2.price)<Math.min(h1.price,h2.price)*(1-tol);
  if(id==='triangle')ok=(dh<-tol||flatHigh)&&(dl>tol||flatLow)&&!(flatHigh&&flatLow)&&narrower;
- if(id==='risingwedge')ok=dh>tol&&dl>tol&&dl>dh&&narrower;
- if(id==='fallingwedge')ok=dh<-tol&&dl<-tol&&dh<dl&&narrower;
+ if(id==='risingwedge')ok=dh>tol&&dl>tol&&narrower;
+ if(id==='fallingwedge')ok=dh<-tol&&dl<-tol&&narrower;
  if(!ok)return null;
+ if(textbook&&q[3].index-q[0].index<TEXTBOOK_RULES.spanBars)return null;
  return hit(q,[extended(h1,h2,at),extended(l1,l2,at)]);
 }
 
 
 
-const BREAKOUT_PATTERNS                            =new Set                (['doubletop','doublebottom','tripletop','triplebottom','headshoulders','invheadshoulders']);
+const BREAKOUT_PATTERNS                            =new Set                (CHART_PATTERNS.map(row=>row.id));
 
 
 
-function breakoutRule(hit                )                                                                    {
+
+
+const lineAt=(a      ,b      )=>{const slope=b.index===a.index?0:(b.price-a.price)/(b.index-a.index);return (k       )=>b.price+slope*(k-b.index);};
+function breakoutRule(hit                )             {
  const p=hit.pivots,top=hit.direction==='bearish',window=p[p.length-1].index-p[0].index;
- const extreme=top?Math.max(...p.filter(row=>row.kind==='high').map(row=>row.price)):Math.min(...p.filter(row=>row.kind==='low').map(row=>row.price));
- if(hit.id==='doubletop'||hit.id==='doublebottom'){const level=p[1].price;return {top,level:()=>level,invalid:extreme,window};}
- if(hit.id==='tripletop'||hit.id==='triplebottom'){const level=top?Math.min(p[1].price,p[3].price):Math.max(p[1].price,p[3].price);return {top,level:()=>level,invalid:extreme,window};}
+ const flat=(value       )=>()=>value;
  
- const [a,b]=[p[1],p[3]],slope=b.index===a.index?0:(b.price-a.price)/(b.index-a.index);
- return {top,level:k=>b.price+slope*(k-b.index),invalid:extreme,window};
+ const extreme=()=>top?Math.max(...p.filter(row=>row.kind==='high').map(row=>row.price)):Math.min(...p.filter(row=>row.kind==='low').map(row=>row.price));
+ const reversal=(level                   )             =>top?{down:level,voidUp:flat(extreme()),window}:{up:level,voidDown:flat(extreme()),window};
+ switch(hit.id){
+  
+  case 'doubletop':case 'doublebottom':return reversal(flat(p[1].price));
+  
+  case 'tripletop':case 'triplebottom':return reversal(flat(top?Math.min(p[1].price,p[3].price):Math.max(p[1].price,p[3].price)));
+  
+  case 'headshoulders':case 'invheadshoulders':return reversal(lineAt(p[1],p[3]));
+  case 'bullflag':case 'bullpennant':case 'bearflag':case 'bearpennant':{
+   
+   
+   
+   const [p0,e1,r1,e2,r2]=p,bull=hit.direction==='bullish',mid=(p0.price+e1.price)/2;
+   if(bull){const upper=lineAt(e1,e2),lower=lineAt(r1,r2);return {up:upper,voidDown:k=>Math.max(lower(k),mid),window};}
+   const upper=lineAt(r1,r2),lower=lineAt(e1,e2);return {down:lower,voidUp:k=>Math.min(upper(k),mid),window};
+  }
+  case 'cuphandle':case 'invcuphandle':{
+   
+   
+   const [a,,c,d]=p;
+   return hit.id==='cuphandle'?{up:flat(Math.max(a.price,c.price)),voidDown:flat(d.price),window}:{down:flat(Math.min(a.price,c.price)),voidUp:flat(d.price),window};
+  }
+  default:{
+   
+   const highs=p.filter(row=>row.kind==='high'),lows=p.filter(row=>row.kind==='low'),upper=lineAt(highs[0],highs[1]),lower=lineAt(lows[0],lows[1]);
+   
+   
+   
+   
+   const alive=hit.id==='rectangle'?undefined:(k       )=>upper(k)>lower(k);
+   if(hit.id==='risingwedge')return {down:lower,voidUp:upper,alive,window};
+   if(hit.id==='fallingwedge')return {up:upper,voidDown:lower,alive,window};
+   
+   return {up:upper,down:lower,alive,window};
+  }
+ }
 }
 
 
-function breakoutBar(bars               ,hit                )            {
+
+function scanBreakout(bars               ,hit                )     {
  const rule=breakoutRule(hit),last=hit.pivots[hit.pivots.length-1].index,end=Math.min(bars.length-1,last+rule.window);
  for(let k=last+1;k<=end;k++){
   const close=bars[k].close;if(!finite(close))continue;
-  if(rule.top?close>rule.invalid:close<rule.invalid)return null;
-  if(rule.top?close<rule.level(k):close>rule.level(k))return Math.max(k,hit.confirmedAt);
+  if(rule.alive&&!rule.alive(k))return {ended:k};
+  if(rule.voidUp&&close>rule.voidUp(k)||rule.voidDown&&close<rule.voidDown(k))return {ended:k};
+  if(k<hit.confirmedAt)continue;
+  if(rule.up&&close>rule.up(k))return {at:k,side:'up'};
+  if(rule.down&&close<rule.down(k))return {at:k,side:'down'};
  }
  return null;
 }
 
 
 function detectChartPatterns(bars               ,ids                          ,pivotLength       ,tolerancePercent       ,options                    ={})                  {
- const tol=tolerancePercent/100,out                  =[],seen        =[];
+ const tol=tolerancePercent/100,out                  =[],seen        =[],textbook=!!options.textbook&&chartBarsAreDaily(bars);
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ const earlier=new Map                          ();
  for(const event of zigzagEvents(bars,pivotLength)){
   const pivot      ={index:event.index,price:event.price,kind:event.kind};
   if(event.replaces)seen[seen.length-1]=pivot;else seen.push(pivot);
   for(const id of ids){
-   const found=test(id,seen,tol,event.confirmedAt,bars);if(!found)continue;
-   if(!options.breakout||!BREAKOUT_PATTERNS.has(id)){out.push(found);continue;}
-   const at=breakoutBar(bars,found);if(at===null)continue;
-   out.push(test(id,found.pivots,tol,at,bars) );
+   const found=test(id,seen,tol,event.confirmedAt,bars,textbook);if(!found)continue;
+   const confirming=!!options.breakout&&BREAKOUT_PATTERNS.has(id),first=found.pivots[0].index,last=found.pivots[found.pivots.length-1].index,c=event.confirmedAt;
+   const list=(earlier.get(id)??[]).filter(row=>confirming?row.last+(row.last-row.first)>=c:row.reported===c);earlier.set(id,list);
+   const shared=(row        )=>found.pivots.filter(pv=>row.pivots.has(pv.index)).length,common=(row        )=>Math.min(row.last,last)-Math.max(row.first,first);
+   const row        ={pivots:new Set(found.pivots.map(pv=>pv.index)),first,last,reported:c,at:-1,side:''};
+   if(!confirming){if(list.some(old=>shared(old)>0))continue;list.push(row);out.push(found);continue;}
+   const broke=scanBreakout(bars,found);if(broke===null||!('at' in broke))continue;
+   const dup=list.some(old=>old.at>=0&&old.at<=broke.at&&old.side===broke.side&&(old.at===broke.at?shared(old)>0||common(old)>0:old.at>last&&(2*shared(old)>found.pivots.length||2*common(old)>Math.min(old.last-old.first,last-first))));
+   if(dup)continue;
+   row.at=broke.at;row.side=broke.side;list.push(row);
+   out.push({...test(id,found.pivots,tol,broke.at,bars,textbook) ,breakout:broke.side});
   }
  }
  
@@ -388,7 +477,7 @@ function detectChartPatterns(bars               ,ids                          ,p
 return {CHART_PATTERNS,BREAKOUT_PATTERNS,detectChartPatterns};})();
 const D=(({CANDLE_FAMILIES,CANDLE_THRESHOLDS})=>{
 
-const RULE_VERSION='oc-independent-1.1.0';
+const RULE_VERSION='oc-independent-1.2.0';
 const PROFILE=Object.freeze({
   ...CANDLE_THRESHOLDS,
   nearFraction:0.05,
@@ -455,7 +544,7 @@ for(const bullish of [true,false]){
       k.black(a)&&k.black(b)&&top(k,b)<bot(k,a)&&k.c[c]<k.c[b]&&k.black(d)&&k.c[d]<k.c[c]&&k.white(i)&&k.c[i]>top(k,b)&&k.c[i]<bot(k,a):
       k.white(a)&&k.white(b)&&bot(k,b)>top(k,a)&&k.c[c]>k.c[b]&&k.white(d)&&k.c[d]>k.c[c]&&k.black(i)&&k.c[i]<bot(k,b)&&k.c[i]>top(k,a));
   });
-  add('BeltHold'+key,direction+' belt hold',1,'reversal',direction,'A long directional body opens at its extreme within smallShadow of range; the closing shadow must exceed that tolerance.',(k,i)=>k.long(i)&&(bullish?k.white(i)&&tinyLower(k,i)&&!tinyUpper(k,i):k.black(i)&&tinyUpper(k,i)&&!tinyLower(k,i)));
+  add('BeltHold'+key,direction+' belt hold',1,'reversal',direction,'A long directional body opens at its extreme within smallShadow of range. The closing-side shadow is unrestricted.',(k,i)=>k.long(i)&&(bullish?k.white(i)&&tinyLower(k,i):k.black(i)&&tinyUpper(k,i)));
   add('MeetingLines'+key,direction+' meeting lines',2,'reversal',direction,'Two long opposite-colored bodies close within nearFraction of their larger range; the second body points in the named direction.',(k,i)=>k.long(i-1)&&k.long(i)&&nearAt(k,k.c[i],k.c[i-1],i,i-1)&&(bullish?k.black(i-1)&&k.white(i):k.white(i-1)&&k.black(i)));
   add('SeparateLines'+key,direction+' separating lines',2,'continuation',direction,'Two long opposite-colored bodies share an opening level within nearFraction of the larger range; the second resumes the named trend.',(k,i)=>k.long(i-1)&&k.long(i)&&nearAt(k,k.o[i],k.o[i-1],i,i-1)&&(bullish?k.black(i-1)&&k.white(i):k.white(i-1)&&k.black(i)));
   add('SidebySideWhiteLines'+key,direction+' side-by-side white lines',3,'continuation',direction,'The final two up bodies have similar lengths and openings; both bodies sit wholly beyond the first body in the trend direction.',(k,i)=>k.white(i-1)&&k.white(i)&&nearBody(k,i,i-1)&&nearAt(k,k.o[i],k.o[i-1],i,i-1)&&(bullish?k.white(i-2)&&Math.min(bot(k,i-1),bot(k,i))>top(k,i-2):k.black(i-2)&&Math.max(top(k,i-1),top(k,i))<bot(k,i-2)));
@@ -605,15 +694,16 @@ function scanCandles(bars,options={}){
 }
 
 function scanCharts(bars,options={}){
-  checkOptions(options,['datasetId','symbol','timeframe','patternIds','pivotLength','tolerancePercent','breakout']);
+  checkOptions(options,['datasetId','symbol','timeframe','patternIds','pivotLength','tolerancePercent','breakout','textbook']);
   validateBars(bars);
-  const ids=options.patternIds??CHART_DEFINITIONS.map(d=>d.id),pivotLength=options.pivotLength??5,tolerancePercent=options.tolerancePercent??2,breakout=options.breakout??true;
+  const ids=options.patternIds??CHART_DEFINITIONS.map(d=>d.id),pivotLength=options.pivotLength??5,tolerancePercent=options.tolerancePercent??2,breakout=options.breakout??true,textbook=options.textbook??true;
   if(!Array.isArray(ids)||new Set(ids).size!==ids.length||ids.some(id=>!CHART_DEFINITIONS.some(d=>d.id===id)))throw new RangeError('Unknown or duplicate chart pattern ID');
   if(!Number.isInteger(pivotLength)||pivotLength<1||pivotLength>100)throw new RangeError('pivotLength must be an integer from 1 through 100');
   if(!Number.isFinite(tolerancePercent)||tolerancePercent<=0||tolerancePercent>25)throw new RangeError('tolerancePercent must be > 0 and <= 25');
   if(typeof breakout!=='boolean')throw new TypeError('breakout must be boolean');
-  const params={ruleVersion:RULE_VERSION,pivotLength,tolerancePercent,breakout},configId=parameterId(params),seen=new Set(),matches=[];
-  for(const hit of detectChartPatterns(bars,ids,pivotLength,tolerancePercent,{breakout})){
+  if(typeof textbook!=='boolean')throw new TypeError('textbook must be boolean');
+  const params={ruleVersion:RULE_VERSION,pivotLength,tolerancePercent,breakout,textbook},configId=parameterId(params),seen=new Set(),matches=[];
+  for(const hit of detectChartPatterns(bars,ids,pivotLength,tolerancePercent,{breakout,textbook})){
     const def=CHART_DEFINITIONS.find(d=>d.id===hit.id),start=hit.pivots[0].index,end=hit.pivots.at(-1).index;
     const result=detection(def,bars,{start,end,confirmedAt:hit.confirmedAt},options,configId,{category:'chart',confirmation:breakout&&BREAKOUT_PATTERNS.has(hit.id)?'pivot_and_close_breakout':'pivot_shape_only',pivots:hit.pivots,lines:hit.lines});
     if(!seen.has(result.id)){seen.add(result.id);matches.push(result);}
