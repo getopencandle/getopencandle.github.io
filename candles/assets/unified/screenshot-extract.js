@@ -105,6 +105,40 @@
           if (!band) { band = { top: run.y, bottom: run.y, left: run.left, right: run.right }; bands.push(band); }
           else { band.bottom = run.y; band.left = Math.min(band.left, run.left); band.right = Math.max(band.right, run.right); }
         }
+        // A colored annotation can cover part of a body without disconnecting it.
+        // Join only aligned bands from this same component when every missing
+        // row retains a broad body edge and the covering stroke extends outside.
+        const pixelAt=(x,y)=>{const i=((y+y0)*width+x+x0)*4;return [pixels[i],pixels[i+1],pixels[i+2]];};
+        const colorDistance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+        function obscuredBodyGap(a,b){
+          if(a.left!==b.left||a.right!==b.right||b.top<=a.bottom+1)return false;
+          const bw=a.right-a.left+1,required=Math.max(3,Math.ceil(bw*.25));
+          for(let y=a.bottom+1;y<b.top;y++){
+            const xs=new Set(rows.get(y)||[]);
+            let supported=false;
+            for(const side of [-1,1]){
+              const edge=side<0?a.left:a.right;
+              let retained=0;
+              while(xs.has(edge-side*retained)&&retained<bw)retained++;
+              if(retained<required||retained>=bw*.65)continue;
+              const covered=side<0?a.right:a.left,outside=covered+side*-2;
+              if(outside<0||outside>=crop.width)continue;
+              const ink=pixelAt(covered,y),outer=pixelAt(outside,y),background=pixelAt(outside,a.top);
+              if(colorDistance(ink,outer)<=30&&colorDistance(outer,background)>=24&&colorDistance(ink,colors[colorIndex])>tolerance){supported=true;break;}
+            }
+            if(!supported)return false;
+          }
+          return true;
+        }
+        for(let i=0;i+1<bands.length;){
+          if(obscuredBodyGap(bands[i],bands[i+1])){
+            const hiddenRows=bands[i].obscuredRows||new Set();
+            for(let y=bands[i].bottom+1;y<bands[i+1].top;y++)hiddenRows.add(y);
+            bands[i].obscuredRows=hiddenRows;
+            bands[i].bottom=bands[i+1].bottom;bands.splice(i+1,1);
+            warnings.push('A partially covered candle body was joined across a visible horizontal annotation. Verify its outline against the original image.');
+          }else i++;
+        }
         for (const b of bands) {
           const bw = b.right - b.left + 1, bh = b.bottom - b.top + 1;
           const center = Math.floor((b.left + b.right) / 2), radius = Math.max(1, Math.floor(bw / 3));
@@ -121,11 +155,13 @@
           const innerWidth = bw - 2, innerHeight = bh - 2;
           let hollow = null;
           if (innerWidth > 0 && innerHeight > 0) {
-            let occupied = 0;
+            let occupied = 0, observedRows = 0;
             for (let y = b.top + 1; y < b.bottom; y++) {
+              if(b.obscuredRows?.has(y))continue;
+              observedRows++;
               for (const x of rows.get(y) || []) if (x > b.left && x < b.right) occupied++;
             }
-            hollow = occupied / (innerWidth * innerHeight) < 0.5;
+            hollow = observedRows ? occupied / (innerWidth * observedRows) < 0.5 : null;
           }
           const colorDirection = colorIndex === 0 ? 'up' : 'down';
           let direction = colorDirection;
@@ -134,7 +170,7 @@
             else if (hollow === false) direction = 'down';
             else warnings.push('A candle body was too short or narrow to determine hollow versus filled; its color-selected direction was used.');
           }
-          candidates.push({ x: center + x0, bodyTop: b.top + y0, bodyBottom: b.bottom + y0,
+          candidates.push({ x: center + x0, bodyLeft: b.left + x0, bodyRight: b.right + x0, bodyTop: b.top + y0, bodyBottom: b.bottom + y0,
             wickTop: wickTop + y0, wickBottom: wickBottom + y0,
             bodyWidth: bw, hollow, direction, quality: 'heuristic' });
           if (hollow === true && directionMode === 'color') {
@@ -164,12 +200,24 @@
         }
         return false;
       }
+      function horizontalOcclusion(y,otherY){
+        if(y<y0||y>=y1||otherY<y0||otherY>=y1||c.x-flank<x0||c.x+flank>=x1)return false;
+        const ink=rgb(c.x,y),left=rgb(c.x-flank,y),right=rgb(c.x+flank,y);
+        // A colored horizontal stroke must span both sides and differ from
+        // the background just beyond it. Blank gaps are not inferred as ink.
+        return distance(ink,left)<18&&distance(ink,right)<18&&
+          distance(left,rgb(c.x-flank,otherY))>=24&&distance(right,rgb(c.x+flank,otherY))>=24;
+      }
       let last=start,y=start+direction;
       while(y>=y0&&y<y1){
         if(supported(y)){last=y;y+=direction;continue;}
         // One obscured/antialiased pixel is bridgeable only if the vertical
         // stroke resumes for two pixels. Never extend into an unsupported tail.
         if(supported(y+direction)&&supported(y+2*direction)){last=y+2*direction;y+=3*direction;continue;}
+        if(horizontalOcclusion(y,y-direction)&&horizontalOcclusion(y+direction,y+2*direction)&&
+            supported(y+2*direction)&&supported(y+3*direction)){
+          last=y+3*direction;y+=4*direction;continue;
+        }
         break;
       }
       if(last!==start&&(last===y0||last===y1-1)){
@@ -178,7 +226,26 @@
       }
       return last;
     }
-    for(const c of candidates){c.wickTop=traceWick(c,c.wickTop,-1);c.wickBottom=traceWick(c,c.wickBottom,1);}
+    function measureWick(c){
+      const flank=Math.max(3,Math.ceil(c.bodyWidth/2)+2),counts=new Map();
+      if(c.x-flank>=x0&&c.x+flank<x1){
+        for(let y=c.wickTop;y<=c.wickBottom;y++){
+          if(y>=c.bodyTop&&y<=c.bodyBottom)continue;
+          const left=rgb(c.x-flank,y),right=rgb(c.x+flank,y);
+          const foreground=x=>distance(rgb(x,y),left)>=24&&distance(rgb(x,y),right)>=24;
+          const seed=[c.x,c.x+1,c.x-1].find(x=>foreground(x));
+          if(seed===undefined)continue;
+          let l=seed,r=seed;
+          while(l>c.x-flank+1&&foreground(l-1))l--;
+          while(r<c.x+flank-1&&foreground(r+1))r++;
+          if(r-l+1>Math.max(2,c.bodyWidth-1))continue;
+          const key=l+':'+r,entry=counts.get(key)||{left:l,right:r,count:0};entry.count++;counts.set(key,entry);
+        }
+      }
+      const observed=[...counts.values()].sort((a,b)=>b.count-a.count||Math.abs((a.left+a.right)/2-c.x)-Math.abs((b.left+b.right)/2-c.x))[0];
+      c.wickLeft=observed?observed.left:c.x;c.wickRight=observed?observed.right:c.x;c.wickWidth=c.wickRight-c.wickLeft+1;
+    }
+    for(const c of candidates){c.wickTop=traceWick(c,c.wickTop,-1);c.wickBottom=traceWick(c,c.wickBottom,1);measureWick(c);}
     const candles = candidates;
     if (!candles.length) warnings.push('No candle bodies matched the selected colors and crop. Adjust the crop or candle colors.');
     warnings.push('Screenshot geometry is approximate. No prices, missing candles, or calibrated confidence scores are inferred.');

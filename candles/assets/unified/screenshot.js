@@ -205,6 +205,31 @@
     const y=v=>18+(v-top)/span*198;
     state.candles.forEach((c,i)=>{const x=(i+.5)*step,selected=i===state.selectedCandleIndex;ctx.strokeStyle=ctx.fillStyle=selected?'#ffbe65':c.direction==='up'?'#61bf83':'#e16b73';ctx.lineWidth=selected?3:2;ctx.beginPath();ctx.moveTo(x,y(c.wickTop));ctx.lineTo(x,y(c.wickBottom));ctx.stroke();ctx.fillRect(x-step*.28,y(c.bodyTop),step*.56,Math.max(2,y(c.bodyBottom)-y(c.bodyTop)));if(selected){ctx.font='bold 13px sans-serif';ctx.fillText('#'+(i+1),Math.max(0,x-9),237);}});
   }
+  function candleBodyRect(c) {
+    const width=Math.max(1,Number(c.bodyWidth)||1);
+    const left=Number.isFinite(c.bodyLeft)?c.bodyLeft:c.x-Math.floor((width-1)/2);
+    const right=Number.isFinite(c.bodyRight)?c.bodyRight:left+width-1;
+    return {left,top:c.bodyTop,width:right-left+1,height:Math.max(1,c.bodyBottom-c.bodyTop+1)};
+  }
+  function paintCandleBody(ctx,c) {
+    const r=candleBodyRect(c);
+    if(c.hollow!==true){ctx.fillRect(r.left,r.top,r.width,r.height);return;}
+    const border=Math.max(1,Math.min(Number(c.bodyBorderWidth)||1,Math.ceil(r.width/2),Math.ceil(r.height/2)));
+    if(border*2>=r.width||border*2>=r.height){ctx.fillRect(r.left,r.top,r.width,r.height);return;}
+    ctx.fillRect(r.left,r.top,r.width,border);
+    ctx.fillRect(r.left,r.top+r.height-border,r.width,border);
+    ctx.fillRect(r.left,r.top+border,border,r.height-border*2);
+    ctx.fillRect(r.left+r.width-border,r.top+border,border,r.height-border*2);
+  }
+  function paintCandleWicks(ctx,c) {
+    const left=Number.isFinite(c.wickLeft)?c.wickLeft:c.x;
+    const right=Number.isFinite(c.wickRight)?c.wickRight:left;
+    const width=Math.max(1,right-left+1);
+    // Extracted bounds are inclusive pixel cells, not canvas path coordinates.
+    // Keep the wick outside the body so hollow candles remain hollow.
+    if(c.wickTop<c.bodyTop)ctx.fillRect(left,c.wickTop,width,c.bodyTop-c.wickTop);
+    if(c.wickBottom>c.bodyBottom)ctx.fillRect(left,c.bodyBottom+1,width,c.wickBottom-c.bodyBottom);
+  }
   function drawCanvas() {
     drawRebuilt();
     if (!state.image) return;
@@ -214,12 +239,12 @@
       ctx.save(); ctx.fillStyle = 'rgba(7, 12, 18, .42)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle='#10151b';ctx.fillRect(state.crop.x,state.crop.y,state.crop.width,state.crop.height);ctx.globalAlpha=state.originalVisible?state.originalOpacity:0; ctx.drawImage(state.image, state.crop.x, state.crop.y, state.crop.width, state.crop.height, state.crop.x, state.crop.y, state.crop.width, state.crop.height);ctx.globalAlpha=1; ctx.strokeStyle = '#79dce8'; ctx.lineWidth = Math.max(2, canvas.width / 900); ctx.setLineDash([8, 5]); ctx.strokeRect(state.crop.x, state.crop.y, state.crop.width, state.crop.height); ctx.restore();
     }
     ctx.save();ctx.globalAlpha=state.overlayOpacity;
-    state.candles.forEach(c=>{ctx.fillStyle=ctx.strokeStyle=c.direction==='up'?'#61bf83':'#e16b73';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(c.x,c.wickTop);ctx.lineTo(c.x,c.wickBottom);ctx.stroke();const width=Math.max(2,c.bodyWidth||2);ctx.fillRect(c.x-width/2,c.bodyTop,width,Math.max(1,c.bodyBottom-c.bodyTop));});ctx.restore();
+    state.candles.forEach(c=>{ctx.fillStyle=ctx.strokeStyle=c.direction==='up'?'#61bf83':'#e16b73';paintCandleWicks(ctx,c);paintCandleBody(ctx,c);});ctx.restore();
     const candle=state.candles[state.selectedCandleIndex];
     if(candle){
       ctx.save();ctx.globalAlpha=state.overlayOpacity;ctx.strokeStyle='#ffbe65';ctx.fillStyle='rgba(255,174,75,.65)';ctx.shadowColor='#ffb64d';ctx.shadowBlur=10;ctx.lineWidth=3;
-      ctx.beginPath();ctx.moveTo(candle.x,candle.wickTop);ctx.lineTo(candle.x,candle.wickBottom);ctx.stroke();
-      const width=Math.max(2,candle.bodyWidth||2);ctx.fillRect(candle.x-width/2,candle.bodyTop,width,Math.max(2,candle.bodyBottom-candle.bodyTop));
+      paintCandleWicks(ctx,candle);
+      const width=candleBodyRect(candle).width;paintCandleBody(ctx,candle);
       ctx.shadowBlur=0;ctx.fillStyle='#ffce8a';ctx.font='bold 16px sans-serif';if(!state.numberAll)ctx.fillText('#'+(state.selectedCandleIndex+1),candle.x+width/2+5,Math.max(18,candle.wickTop-7));ctx.restore();
     }
     const selected = state.matches[state.selectedMatchIndex];
@@ -227,10 +252,10 @@
       ctx.save(); ctx.globalAlpha=state.overlayOpacity;ctx.strokeStyle = selected.shapeOnly ? '#e6bd68' : '#f2a65a'; ctx.fillStyle = selected.shapeOnly ? 'rgba(230,189,104,.24)' : 'rgba(242,166,90,.24)'; ctx.lineWidth = Math.max(2, canvas.width / 850);
       for (let i = selected.startIndex; i <= selected.endIndex; i++) {
         const c = state.candles[i]; if (!c) continue;
-        const bodyWidth = Math.max(2, Number(c.bodyWidth) || state.minimumBodyWidth);
-        ctx.beginPath(); ctx.moveTo(c.x, c.wickTop); ctx.lineTo(c.x, c.wickBottom); ctx.stroke();
-        ctx.fillRect(c.x - bodyWidth / 2, c.bodyTop, bodyWidth, Math.max(1, c.bodyBottom - c.bodyTop));
-        ctx.strokeRect(c.x - bodyWidth / 2 - 2, c.bodyTop - 2, bodyWidth + 4, Math.max(5, c.bodyBottom - c.bodyTop + 4));
+        const bodyRect = candleBodyRect(c);
+        const bodyFill=ctx.fillStyle;ctx.fillStyle=ctx.strokeStyle;paintCandleWicks(ctx,c);ctx.fillStyle=bodyFill;
+        paintCandleBody(ctx,c);
+        ctx.strokeRect(bodyRect.left-2,bodyRect.top-2,bodyRect.width+4,bodyRect.height+4);
       }
       ctx.restore();
     }
@@ -286,7 +311,7 @@
       const aligned=result.candles.filter(c=>result.candles.filter(o=>Math.abs(o.wickBottom-c.wickBottom)<=2).length>=3&&c.wickBottom-c.bodyBottom<=2&&c.bodyBottom-c.bodyTop>8);
       if(aligned.length>=3)state.extractionWarnings.push('Possible volume histogram: '+aligned.length+' bars share a bottom baseline. Crop to the price panel or remove volume bars before confirming; this is a heuristic warning, not a reliable volume classifier.'); state.warnings = [...state.extractionWarnings]; state.matches = []; state.confirmed = false;
       q('#screenshot-confirm-geometry').checked = false; q('#screenshot-analyze').disabled = true; q('#screenshot-candle-review').hidden = false; q('#screenshot-results').hidden = true;
-      q('#screenshot-review-warnings').textContent=state.extractionWarnings.filter(w=>w.startsWith('Possible volume')||w.includes('hollow')).join(' ');
+      q('#screenshot-review-warnings').textContent=state.extractionWarnings.filter(w=>w.startsWith('Possible volume')||w.includes('hollow')||w.includes('annotation')).join(' ');
       q('#screenshot-geometry').open=false;q('#screenshot-results').open=false;q('#screenshot-inspector').hidden=!state.candles.length;
       state.selectedCandleIndex=null;renderCandleReview();setMode('select');
       if(state.candles.length)selectCandle(0,false);
