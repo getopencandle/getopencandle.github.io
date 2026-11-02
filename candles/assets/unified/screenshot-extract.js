@@ -145,6 +145,40 @@
     }
 
     candidates.sort((a, b) => a.x - b.x || a.bodyTop - b.bodyTop);
+    // Body colors and wick colors are often different. Trace narrow vertical
+    // contrast against both local flanks, independently of the body-color mask.
+    const rgb=(x,y)=>{const i=(y*width+x)*4;return [pixels[i],pixels[i+1],pixels[i+2]];};
+    const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+    function traceWick(c,start,direction){
+      const flank=Math.max(3,Math.ceil(c.bodyWidth/2)+2);
+      function supported(y){
+        if(y<y0||y>=y1||c.x-flank<x0||c.x+flank>=x1)return false;
+        const left=rgb(c.x-flank,y),right=rgb(c.x+flank,y);
+        for(let dx=-1;dx<=1;dx++){
+          const x=c.x+dx,ink=rgb(x,y);
+          if(distance(ink,left)<24||distance(ink,right)<24)continue;
+          // A horizontal grid/indicator stroke is not a narrow vertical wick.
+          const side=Math.max(2,Math.ceil(c.bodyWidth*.3));
+          if(distance(ink,rgb(x-side,y))<18&&distance(ink,rgb(x+side,y))<18)continue;
+          return true;
+        }
+        return false;
+      }
+      let last=start,y=start+direction;
+      while(y>=y0&&y<y1){
+        if(supported(y)){last=y;y+=direction;continue;}
+        // One obscured/antialiased pixel is bridgeable only if the vertical
+        // stroke resumes for two pixels. Never extend into an unsupported tail.
+        if(supported(y+direction)&&supported(y+2*direction)){last=y+2*direction;y+=3*direction;continue;}
+        break;
+      }
+      if(last!==start&&(last===y0||last===y1-1)){
+        warnings.push('A possible wick reaches the crop edge and may be a vertical grid line. Its extra extent was not assumed; review this candle or widen the crop.');
+        return start;
+      }
+      return last;
+    }
+    for(const c of candidates){c.wickTop=traceWick(c,c.wickTop,-1);c.wickBottom=traceWick(c,c.wickBottom,1);}
     const candles = candidates;
     if (!candles.length) warnings.push('No candle bodies matched the selected colors and crop. Adjust the crop or candle colors.');
     warnings.push('Screenshot geometry is approximate. No prices, missing candles, or calibrated confidence scores are inferred.');

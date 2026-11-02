@@ -6,3 +6,5 @@
 #screenshot-candle-rows tr{cursor:pointer}#screenshot-candle-rows tr.selected{background:#443323;color:#ffda9b}#screenshot-candle-rows tr:focus-visible{outline:2px solid #ffbe65;outline-offset:-2px}
 
 #screenshot-rebuilt{display:block;width:100%;height:auto;max-height:240px;cursor:pointer;margin:10px 0 16px;border:1px solid #343b45}
+
+#screenshot-rebuilt[hidden]{display:none!important}
