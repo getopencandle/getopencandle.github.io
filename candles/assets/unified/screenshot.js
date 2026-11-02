@@ -5,7 +5,7 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const supportedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
   const state = { originalVisible:true, originalOpacity:1, overlayOpacity:.55, image: null, sourceCanvas: null, fileName: '', crop: null, cropDraft: null, mode: 'crop', pickMode: null, candles: [], matches: [], selectedCandleIndex: null, selectedMatchIndex: null, warnings: [], extractionWarnings: [], confirmed: false, colorTolerance: 70, minimumBodyWidth: 2 };
-  let opener = null, activePointer = null;
+  let opener = null, activePointer = null, analysisReady = false;
 
   function install() {
     const topbar = q('.topbar');
@@ -19,6 +19,10 @@
     q('#screenshot-open').addEventListener('click', openDialog);
     q('#screenshot-close').addEventListener('click', () => q('#screenshot-dialog').close());
     q('#screenshot-dialog').addEventListener('close', () => { if (opener?.isConnected) opener.focus(); });
+    const wrap=q('#screenshot-canvas-wrap'), layout=document.createElement('div');
+    layout.className='screenshot-inspect-layout';wrap.before(layout);layout.append(wrap);
+    layout.insertAdjacentHTML('beforeend','<aside id="screenshot-inspector" hidden aria-label="Selected candle patterns"><div id="screenshot-selected-info" aria-live="polite"></div><div id="screenshot-selected-matches"></div><div id="screenshot-inspector-controls"></div></aside>');
+    for(const selector of ['.screenshot-shape-option','.screenshot-confirm','#screenshot-analyze','#screenshot-context-note']) q('#screenshot-inspector-controls').append(q(selector));
     bindControls();
   }
 
@@ -48,8 +52,8 @@
         <div class="screenshot-canvas-tools"><button type="button" id="screenshot-original" aria-pressed="true">Show original</button><label>Original opacity<input id="screenshot-original-opacity" type="range" min="0" max="100" value="100"></label><label>Rebuilt opacity<input id="screenshot-overlay-opacity" type="range" min="0" max="100" value="55"></label></div><div id="screenshot-canvas-wrap" class="screenshot-canvas-wrap"><canvas id="screenshot-canvas" aria-label="Loaded chart image. Drag to set crop or select a candle color."></canvas></div>
         <div id="screenshot-crop-label" class="screenshot-crop-label"></div>
         <button id="screenshot-detect" type="button" disabled>Detect candles for review</button>
-        <section id="screenshot-candle-review" class="screenshot-candle-review" hidden><p>Use the original and rebuilt opacity sliders above to check candle alignment. Crop out volume and indicator panels before analyzing.</p><canvas id="screenshot-rebuilt" hidden width="1000" height="240" aria-label="Reconstructed candles; click one to select its row"></canvas><div id="screenshot-review-warnings" role="status"></div><h3>Review extracted geometry</h3><p>Click a row to highlight its candle, or use Select candle and click the image. Numbers run left to right. Remove false detections before confirming.</p><div class="screenshot-table-wrap"><table><thead><tr><th>#</th><th>Direction</th><th>Body style</th><th>Body width</th><th>Body top</th><th>Body bottom</th><th>Wick top</th><th>Wick bottom</th><th></th></tr></thead><tbody id="screenshot-candle-rows"></tbody></table></div><label class="screenshot-shape-option"><input id="screenshot-shape-only" type="checkbox" checked> Include shapes with unknown prior trend</label><label class="screenshot-confirm"><input id="screenshot-confirm-geometry" type="checkbox"> I checked the candle outlines and their visible order.</label><button id="screenshot-analyze" type="button" disabled>Analyze patterns</button><p id="screenshot-context-note" class="screenshot-note"></p></section>
-        <section id="screenshot-results" class="screenshot-results" hidden><h3>Possible pattern candidates</h3><p class="screenshot-note">Names are detector candidates, not calibrated confidence scores, verified labels, or trading signals. No screenshot-level performance statistics are computed. Select “Highlight” to inspect one match at a time.</p><ul id="screenshot-match-list"></ul><div id="screenshot-warnings"></div></section>
+        <section id="screenshot-candle-review" class="screenshot-candle-review" hidden><p>Use the original and rebuilt opacity sliders above to check candle alignment. Crop out volume and indicator panels before analyzing.</p><canvas id="screenshot-rebuilt" hidden width="1000" height="240" aria-label="Reconstructed candles; click one to select its row"></canvas><div id="screenshot-review-warnings" role="status"></div><details id="screenshot-geometry"><summary>Review / remove detected candles</summary><p>Click a row to highlight its candle, or use Select candle and click the image. Numbers run left to right. Remove false detections before confirming.</p><div class="screenshot-table-wrap"><table><thead><tr><th>#</th><th>Direction</th><th>Body style</th><th>Body width</th><th>Body top</th><th>Body bottom</th><th>Wick top</th><th>Wick bottom</th><th></th></tr></thead><tbody id="screenshot-candle-rows"></tbody></table></div></details><label class="screenshot-shape-option"><input id="screenshot-shape-only" type="checkbox" checked> Include shapes with unknown prior trend</label><label class="screenshot-confirm"><input id="screenshot-confirm-geometry" type="checkbox"> I checked the candle outlines and their visible order.</label><button id="screenshot-analyze" type="button" disabled>Analyze patterns</button><p id="screenshot-context-note" class="screenshot-note"></p></section>
+        <details id="screenshot-results" class="screenshot-results" hidden><summary>All chart candidates &amp; scan notes</summary><p class="screenshot-note">Names are detector candidates, not calibrated confidence scores, verified labels, or trading signals. No screenshot-level performance statistics are computed. Select “Highlight” to inspect one match at a time.</p><ul id="screenshot-match-list"></ul><div id="screenshot-warnings"></div></details>
       </section>
       <p class="screenshot-footnote">Screenshot pixels do not reveal exact prices, missing candles, volume, or prior history beyond the crop. Bars are treated as consecutive; the image cannot identify their actual interval. Uncalibrated linear mode uses relative placeholders for candle shapes only. Chart geometry requires price-axis calibration; logarithmic mode requires calibration before any scan.</p>
     </dialog>`;
@@ -72,10 +76,10 @@
     q('#screenshot-detect').addEventListener('click', detectCandles);
     q('#screenshot-confirm-geometry').addEventListener('change', event => {
       state.confirmed = event.target.checked;
-      updateAnalyzeButton();
+      updateAnalyzeButton();renderInspector();
     });
     q('#screenshot-shape-only').addEventListener('change', invalidateAnalysis);
-    q('#screenshot-analyze').addEventListener('click', analyzePatterns);
+    q('#screenshot-analyze').addEventListener('click', () => analyzePatterns());
     q('#screenshot-rebuilt').addEventListener('click',event=>{const rect=event.currentTarget.getBoundingClientRect();const i=Math.floor((event.clientX-rect.left)/rect.width*state.candles.length);selectCandle(i,true);});
     q('#screenshot-tolerance').addEventListener('input', event => { state.colorTolerance = Math.max(0, Number(event.target.value)); invalidateDetections(); });
     q('#screenshot-min-width').addEventListener('input', event => { state.minimumBodyWidth = Math.max(1, Number(event.target.value)); invalidateDetections(); });
@@ -104,7 +108,7 @@
 
   function showStatus(message, error = false) { const el = q('#screenshot-status'); el.textContent = message; el.classList.toggle('error', error); }
   function clearImage() {
-    state.image = null; state.sourceCanvas = null; state.fileName = ''; state.crop = null; state.cropDraft = null; state.candles = []; state.matches = []; state.selectedCandleIndex = null; state.selectedMatchIndex = null; state.warnings = []; state.extractionWarnings = []; state.confirmed = false;
+    analysisReady=false;q('#screenshot-inspector').hidden=true;state.image = null; state.sourceCanvas = null; state.fileName = ''; state.crop = null; state.cropDraft = null; state.candles = []; state.matches = []; state.selectedCandleIndex = null; state.selectedMatchIndex = null; state.warnings = []; state.extractionWarnings = []; state.confirmed = false;
     q('#screenshot-file').value = ''; q('#screenshot-workspace').hidden = true; q('#screenshot-clear').disabled = true; q('#screenshot-candle-review').hidden = true; q('#screenshot-results').hidden = true; q('#screenshot-candle-rows').replaceChildren();
     showStatus('Select an image to begin.');
   }
@@ -122,6 +126,7 @@
     image.onload = () => {
       if (!image.naturalWidth || !image.naturalHeight) { showStatus('The image has no readable pixels.', true); return; }
       try {
+        analysisReady=false;q('#screenshot-inspector').hidden=true;
         state.originalVisible=true;state.originalOpacity=1;state.overlayOpacity=.55;q('#screenshot-original').setAttribute('aria-pressed','true');q('#screenshot-original-opacity').value='100';q('#screenshot-overlay-opacity').value='55';
         state.image = image; state.sourceCanvas = null; state.fileName = name; state.crop = { x: 0, y: 0, width: image.naturalWidth, height: image.naturalHeight }; state.candles = []; state.matches = []; state.selectedCandleIndex = null; state.selectedMatchIndex = null; state.warnings = []; state.extractionWarnings = []; state.confirmed = false;
         q('#screenshot-scale').value = 'linear'; q('#screenshot-top-price').value = ''; q('#screenshot-bottom-price').value = '';
@@ -137,7 +142,7 @@
     state.mode = mode; state.pickMode = mode === 'up' || mode === 'down' ? mode : null;
     q('#screenshot-dialog').querySelectorAll('[data-shot-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.shotMode === mode)));
     q('#screenshot-canvas').classList.toggle('picking-color', !!state.pickMode);
-    showStatus(mode === 'select' ? 'Click a candle to select its matching review row.' : mode === 'crop' ? 'Drag over the price panel to set the crop. Use the full image if no crop is needed.' : `Click a ${directionColorLabel(mode)} candle body to sample its color.`);
+    showStatus(mode === 'select' ? 'Click a candle to see its possible patterns beside the chart.' : mode === 'crop' ? 'Drag over the price panel to set the crop. Use the full image if no crop is needed.' : `Click a ${directionColorLabel(mode)} candle body to sample its color.`);
   }
   function directionColorLabel(mode) {
     if (q('#screenshot-direction-mode').value !== 'hollow') return mode === 'up' ? 'bullish/up' : 'bearish/down';
@@ -232,7 +237,7 @@
   function updateCropLabel() { const c = state.crop; q('#screenshot-crop-label').textContent = c ? `Crop: x ${Math.round(c.x)}, y ${Math.round(c.y)}, ${Math.round(c.width)} × ${Math.round(c.height)} px` : ''; }
   function invalidateDetections() {
     if (!state.image) return;
-    state.candles = []; state.matches = []; state.selectedCandleIndex = null; state.selectedMatchIndex = null; state.extractionWarnings = []; state.confirmed = false; q('#screenshot-confirm-geometry').checked = false; q('#screenshot-candle-review').hidden = true; q('#screenshot-results').hidden = true; q('#screenshot-detect').disabled = false; drawCanvas();
+    analysisReady=false;q('#screenshot-inspector').hidden=true;state.candles = []; state.matches = []; state.selectedCandleIndex = null; state.selectedMatchIndex = null; state.extractionWarnings = []; state.confirmed = false; q('#screenshot-confirm-geometry').checked = false; q('#screenshot-candle-review').hidden = true; q('#screenshot-results').hidden = true; q('#screenshot-detect').disabled = false; drawCanvas();
   }
   function getSourceContext() {
     if (!state.image) throw new Error('No image is loaded.');
@@ -252,16 +257,17 @@
     try {
       const ctx = getSourceContext(), imageData = ctx.getImageData(0, 0, state.image.naturalWidth, state.image.naturalHeight);
       const result = window.ScreenshotExtractor.extract(imageData, { crop: state.crop, upColor: hexRgb('#screenshot-up-color'), downColor: hexRgb('#screenshot-down-color'), directionMode: q('#screenshot-direction-mode').value, colorTolerance: state.colorTolerance, minimumBodyWidth: state.minimumBodyWidth });
-      state.candles = result.candles || []; state.extractionWarnings = result.warnings || [];
+      analysisReady=false;state.selectedMatchIndex=null;state.candles = result.candles || []; state.extractionWarnings = result.warnings || [];
       const aligned=result.candles.filter(c=>result.candles.filter(o=>Math.abs(o.wickBottom-c.wickBottom)<=2).length>=3&&c.wickBottom-c.bodyBottom<=2&&c.bodyBottom-c.bodyTop>8);
       if(aligned.length>=3)state.extractionWarnings.push('Possible volume histogram: '+aligned.length+' bars share a bottom baseline. Crop to the price panel or remove volume bars before confirming; this is a heuristic warning, not a reliable volume classifier.'); state.warnings = [...state.extractionWarnings]; state.matches = []; state.confirmed = false;
       q('#screenshot-confirm-geometry').checked = false; q('#screenshot-analyze').disabled = true; q('#screenshot-candle-review').hidden = false; q('#screenshot-results').hidden = true;
       q('#screenshot-review-warnings').textContent=state.extractionWarnings.filter(w=>w.startsWith('Possible volume')||w.includes('hollow')).join(' ');
+      q('#screenshot-geometry').open=false;q('#screenshot-results').open=false;q('#screenshot-inspector').hidden=!state.candles.length;
       state.selectedCandleIndex=null;renderCandleReview();setMode('select');
       if(state.candles.length)selectCandle(0,false);
       if (state.candles.length < 51) q('#screenshot-context-note').textContent = `Only ${state.candles.length} candles were extracted. This is too few to provide a full preceding SMA50 context at any candidate. The detector applies its normal eligibility rules; no missing context is invented.`;
       else q('#screenshot-context-note').textContent = 'SMA50 trend context is computed only from these extracted candles. Screenshot pixels do not supply preceding history beyond this crop.';
-      showStatus(`${state.candles.length} candle candidates detected. Review the rebuilt preview before confirming. ${state.extractionWarnings.find(w=>w.startsWith('Possible volume'))||''}`);
+      showStatus(`${state.candles.length} candle candidates detected. Click a candle to see possible patterns. Check alignment with the opacity sliders. ${state.extractionWarnings.find(w=>w.startsWith('Possible volume'))||''}`);
       drawCanvas();
     } catch (error) { showStatus(`Could not read image pixels: ${error?.message || error}. Try another image or a tighter crop.`, true); }
   }
@@ -272,15 +278,28 @@
       row.addEventListener('keydown',e=>{if(e.target===row&&['Enter',' '].includes(e.key)){e.preventDefault();selectCandle(Number(row.dataset.reviewCandle),false);}});
     });
     q('#screenshot-candle-rows').querySelectorAll('[data-remove-candle]').forEach(button => button.addEventListener('click', () => {
-      state.candles.splice(Number(button.dataset.removeCandle), 1); state.matches = []; state.selectedCandleIndex = null; state.selectedMatchIndex = null; state.confirmed = false; q('#screenshot-confirm-geometry').checked = false; q('#screenshot-analyze').disabled = true; q('#screenshot-results').hidden = true; renderCandleReview(); drawCanvas();
+      analysisReady=false;state.candles.splice(Number(button.dataset.removeCandle), 1); state.matches = []; state.selectedCandleIndex = null; state.selectedMatchIndex = null; state.confirmed = false; q('#screenshot-confirm-geometry').checked = false; q('#screenshot-analyze').disabled = true; q('#screenshot-results').hidden = true; renderCandleReview(); if(state.candles.length)selectCandle(0,true);else q('#screenshot-inspector').hidden=true;drawCanvas();
     }));
   }
   function selectCandle(index,fromImage){
     if(!state.candles[index])return;
     state.selectedCandleIndex=index;state.selectedMatchIndex=null;
     q('#screenshot-candle-rows').querySelectorAll('[data-review-candle]').forEach(row=>{const selected=Number(row.dataset.reviewCandle)===index;row.setAttribute('aria-selected',String(selected));row.classList.toggle('selected',selected);if(selected&&fromImage){const wrap=row.closest('.screenshot-table-wrap');wrap.scrollTop+=row.getBoundingClientRect().top-wrap.getBoundingClientRect().top-wrap.clientHeight/2;}});
+    if(!analysisReady)analyzePatterns(true);renderInspector();
     drawCanvas();showStatus('Candle #'+(index+1)+' selected - highlighted in amber on the image.');
     if(!fromImage)q('#screenshot-canvas').scrollIntoView({block:'center'});
+  }
+  function renderInspector() {
+    const index=state.selectedCandleIndex,c=state.candles[index];
+    if(!c)return;
+    const range=Math.max(1,c.wickBottom-c.wickTop),pct=n=>Math.round(n/range*100);
+    q('#screenshot-selected-info').innerHTML=`<h3>Candle #${index+1}</h3><p>${c.direction==='up'?'Up':'Down'} body - approximate pixel proportions</p><p>Body ${pct(c.bodyBottom-c.bodyTop)}% / upper wick ${pct(c.bodyTop-c.wickTop)}% / lower wick ${pct(c.wickBottom-c.bodyBottom)}%</p>`;
+    const matches=state.matches.map((m,i)=>({m,i})).filter(({m})=>m.startIndex<=index&&m.endIndex>=index);
+    const host=q('#screenshot-selected-matches');
+    host.innerHTML=`<h4>Possible patterns (${matches.length})</h4><p class="screenshot-note">${state.confirmed?'Geometry marked reviewed; pattern names remain experimental.':'Automatic preview - check the extracted candles before trusting these names.'}</p>`+
+      (!analysisReady?'<p>Analysis unavailable. Check the price scale and calibration settings.</p>':!matches.length?'<p>No rule matched this candle in the extracted context. Not every candle has a named pattern.</p>':matches.map(({m,i})=>`<div class="screenshot-local-match"><button type="button" data-local-match="${i}">${esc(m.name||m.patternId)}</button><small>${m.startIndex===m.endIndex?'Single candle':`Includes candles #${m.startIndex+1} to #${m.endIndex+1}`} / ${m.shapeOnly?'Shape only; prior trend unverified':'Detector candidate'}</small><a data-pattern-route href="${esc(patternLink(m))}">Definition</a></div>`).join(''));
+    host.querySelectorAll('[data-local-match]').forEach(b=>b.addEventListener('click',()=>setSelectedMatch(Number(b.dataset.localMatch))));
+    host.querySelectorAll('[data-pattern-route]').forEach(a=>a.addEventListener('click',()=>q('#screenshot-dialog').close()));
   }
   function getCalibration() {
     const topText = q('#screenshot-top-price').value.trim(), bottomText = q('#screenshot-bottom-price').value.trim();
@@ -297,7 +316,7 @@
     else if (state.candles.length < 51) q('#screenshot-context-note').textContent = `Only ${state.candles.length} bars are available. The full pre-pattern SMA50 context is absent; the scanner applies its normal eligibility rules without inventing missing context. No price calibration is set, so only candle-shape rules can run.`;
     else q('#screenshot-context-note').textContent = 'No price-axis calibration is set. Relative linear pixel geometry is used for candle-shape rules only; chart percentage tolerances are skipped.';
   }
-  function invalidateAnalysis() { state.matches = []; q('#screenshot-results').hidden = true; drawCanvas(); }
+  function invalidateAnalysis() { analysisReady=false;state.matches = [];state.selectedMatchIndex=null;q('#screenshot-results').hidden = true;if(state.candles.length)analyzePatterns(true);renderInspector();drawCanvas(); }
   function pixelsToBars() {
     const c = state.crop, calibration = getCalibration(), scale = q('#screenshot-scale').value;
     const price = y => {
@@ -312,8 +331,8 @@
       return { time: i * 86400, open, high: Math.max(open, close, price(candle.wickTop)), low: Math.min(open, close, price(candle.wickBottom)), close };
     });
   }
-  function analyzePatterns() {
-    if (!state.confirmed || !state.candles.length) { showStatus('Review and confirm the extracted candle geometry first.', true); return; }
+  function analyzePatterns(preview = false) {
+    if ((!preview && !state.confirmed) || !state.candles.length) { showStatus('Review and confirm the extracted candle geometry first.', true); return; }
     const calibration = getCalibration(), scale = q('#screenshot-scale').value;
     if (scale === 'log' && !calibration.valid) { showStatus('Logarithmic price scale requires valid positive top and bottom calibration values before analysis.', true); updateAnalyzeButton(); return; }
     const engine = window.PatternScreenshotEngine;
@@ -338,8 +357,8 @@
         }
       } else warnings.push('Chart-pattern geometry scan skipped: without two price-axis values, percentage tolerances are not meaningful. Linear relative placeholders were used only for candle-shape rules.');
       state.matches = matches.sort((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex || String(a.patternId).localeCompare(String(b.patternId)));
-      state.selectedMatchIndex = state.matches.length ? 0 : null;
-      state.warnings = [...new Set(warnings)]; renderMatches(); q('#screenshot-results').hidden = false; drawCanvas();
+      analysisReady=true;state.selectedMatchIndex = null;
+      state.warnings = [...new Set(warnings)]; renderMatches(); q('#screenshot-results').hidden = false;renderInspector();drawCanvas();
       showStatus(`${state.matches.length} possible candidate${state.matches.length === 1 ? '' : 's'} found in the reviewed screenshot geometry.`);
     } catch (error) { showStatus(`Pattern scan failed: ${error?.message || error}`, true); }
   }
@@ -365,12 +384,13 @@
   }
   function setSelectedMatch(index) {
     if (!Number.isInteger(index) || index < 0 || index >= state.matches.length) return;
-    state.selectedCandleIndex=null;state.selectedMatchIndex = index;
+    state.selectedMatchIndex = index;
     q('#screenshot-match-list').querySelectorAll('[data-candidate-index]').forEach(row => {
       const selected = Number(row.dataset.candidateIndex) === index;
       row.classList.toggle('selected', selected);
       row.querySelector('[data-highlight-candidate]')?.setAttribute('aria-pressed', String(selected));
     });
+    q('#screenshot-selected-matches').querySelectorAll('[data-local-match]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.localMatch)===index)));
     drawCanvas();
   }
 
