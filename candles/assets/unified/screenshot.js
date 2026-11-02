@@ -4,7 +4,7 @@
   const q = (selector, root = document) => root.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const supportedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
-  const state = { originalVisible:true, originalOpacity:1, overlayOpacity:.55, image: null, sourceCanvas: null, fileName: '', crop: null, cropDraft: null, mode: 'crop', pickMode: null, candles: [], matches: [], selectedCandleIndex: null, selectedMatchIndex: null, warnings: [], extractionWarnings: [], confirmed: false, colorTolerance: 70, minimumBodyWidth: 2 };
+  const state = { numberAll:false, originalVisible:true, originalOpacity:1, overlayOpacity:.55, image: null, sourceCanvas: null, fileName: '', crop: null, cropDraft: null, mode: 'crop', pickMode: null, candles: [], matches: [], selectedCandleIndex: null, selectedMatchIndex: null, warnings: [], extractionWarnings: [], confirmed: false, colorTolerance: 70, minimumBodyWidth: 2 };
   let opener = null, activePointer = null, analysisReady = false;
 
   function install() {
@@ -49,7 +49,7 @@
           <label>Bottom price (optional)<input id="screenshot-bottom-price" type="number" min="0" step="any" inputmode="decimal" placeholder="Calibrate chart"></label>
         </div>
         <p class="screenshot-hint">Draw a rectangle around only the price candles; exclude volume bars, indicators, labels and legends. For hollow charts, select “Hollow up / filled down”: body fill indicates direction while color can reflect the previous close. For chart geometry, enter visible positive prices at the crop's top and bottom edges.</p>
-        <div class="screenshot-canvas-tools"><button type="button" id="screenshot-original" aria-pressed="true">Show original</button><label>Original opacity<input id="screenshot-original-opacity" type="range" min="0" max="100" value="100"></label><label>Rebuilt opacity<input id="screenshot-overlay-opacity" type="range" min="0" max="100" value="55"></label></div><div id="screenshot-canvas-wrap" class="screenshot-canvas-wrap"><canvas id="screenshot-canvas" aria-label="Loaded chart image. Drag to set crop or select a candle color."></canvas></div>
+        <div class="screenshot-canvas-tools"><button type="button" id="screenshot-number-all" aria-pressed="false">Number all candles</button><button type="button" id="screenshot-original" aria-pressed="true">Show original</button><label>Original opacity<input id="screenshot-original-opacity" type="range" min="0" max="100" value="100"></label><label>Rebuilt opacity<input id="screenshot-overlay-opacity" type="range" min="0" max="100" value="55"></label></div><div id="screenshot-canvas-wrap" class="screenshot-canvas-wrap"><canvas id="screenshot-canvas" aria-label="Loaded chart image. Drag to set crop or select a candle color."></canvas></div>
         <div id="screenshot-crop-label" class="screenshot-crop-label"></div>
         <button id="screenshot-detect" type="button" disabled>Detect candles for review</button>
         <section id="screenshot-candle-review" class="screenshot-candle-review" hidden><p>Use the original and rebuilt opacity sliders above to check candle alignment. Crop out volume and indicator panels before analyzing.</p><canvas id="screenshot-rebuilt" hidden width="1000" height="240" aria-label="Reconstructed candles; click one to select its row"></canvas><div id="screenshot-review-warnings" role="status"></div><details id="screenshot-geometry"><summary>Review / remove detected candles</summary><p>Click a row to highlight its candle, or use Select candle and click the image. Numbers run left to right. Remove false detections before confirming.</p><div class="screenshot-table-wrap"><table><thead><tr><th>#</th><th>Direction</th><th>Body style</th><th>Body width</th><th>Body top</th><th>Body bottom</th><th>Wick top</th><th>Wick bottom</th><th></th></tr></thead><tbody id="screenshot-candle-rows"></tbody></table></div></details><label class="screenshot-shape-option"><input id="screenshot-shape-only" type="checkbox" checked> Include shapes with unknown prior trend</label><label class="screenshot-confirm"><input id="screenshot-confirm-geometry" type="checkbox"> I checked the candle outlines and their visible order.</label><button id="screenshot-analyze" type="button" disabled>Analyze patterns</button><p id="screenshot-context-note" class="screenshot-note"></p></section>
@@ -69,6 +69,7 @@
   function bindControls() {
     const dialog = q('#screenshot-dialog'), file = q('#screenshot-file'), canvas = q('#screenshot-canvas');
     file.addEventListener('change', () => { if (file.files?.[0]) loadFile(file.files[0]); });
+    q('#screenshot-number-all').addEventListener('click',()=>{state.numberAll=!state.numberAll;q('#screenshot-number-all').setAttribute('aria-pressed',String(state.numberAll));drawCanvas();});
     q('#screenshot-original').addEventListener('click',()=>{state.originalVisible=!state.originalVisible;q('#screenshot-original').setAttribute('aria-pressed',String(state.originalVisible));drawCanvas();});
     q('#screenshot-original-opacity').addEventListener('input',e=>{state.originalOpacity=Number(e.target.value)/100;drawCanvas();});
     q('#screenshot-overlay-opacity').addEventListener('input',e=>{state.overlayOpacity=Number(e.target.value)/100;drawCanvas();});
@@ -127,7 +128,7 @@
       if (!image.naturalWidth || !image.naturalHeight) { showStatus('The image has no readable pixels.', true); return; }
       try {
         analysisReady=false;q('#screenshot-inspector').hidden=true;
-        state.originalVisible=true;state.originalOpacity=1;state.overlayOpacity=.55;q('#screenshot-original').setAttribute('aria-pressed','true');q('#screenshot-original-opacity').value='100';q('#screenshot-overlay-opacity').value='55';
+        state.numberAll=false;q('#screenshot-number-all').setAttribute('aria-pressed','false');state.originalVisible=true;state.originalOpacity=1;state.overlayOpacity=.55;q('#screenshot-original').setAttribute('aria-pressed','true');q('#screenshot-original-opacity').value='100';q('#screenshot-overlay-opacity').value='55';
         state.image = image; state.sourceCanvas = null; state.fileName = name; state.crop = { x: 0, y: 0, width: image.naturalWidth, height: image.naturalHeight }; state.candles = []; state.matches = []; state.selectedCandleIndex = null; state.selectedMatchIndex = null; state.warnings = []; state.extractionWarnings = []; state.confirmed = false;
         q('#screenshot-scale').value = 'linear'; q('#screenshot-top-price').value = ''; q('#screenshot-bottom-price').value = '';
         const canvas = q('#screenshot-canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
@@ -219,7 +220,7 @@
       ctx.save();ctx.globalAlpha=state.overlayOpacity;ctx.strokeStyle='#ffbe65';ctx.fillStyle='rgba(255,174,75,.65)';ctx.shadowColor='#ffb64d';ctx.shadowBlur=10;ctx.lineWidth=3;
       ctx.beginPath();ctx.moveTo(candle.x,candle.wickTop);ctx.lineTo(candle.x,candle.wickBottom);ctx.stroke();
       const width=Math.max(2,candle.bodyWidth||2);ctx.fillRect(candle.x-width/2,candle.bodyTop,width,Math.max(2,candle.bodyBottom-candle.bodyTop));
-      ctx.shadowBlur=0;ctx.fillStyle='#ffce8a';ctx.font='bold 16px sans-serif';ctx.fillText('#'+(state.selectedCandleIndex+1),candle.x+width/2+5,Math.max(18,candle.wickTop-7));ctx.restore();
+      ctx.shadowBlur=0;ctx.fillStyle='#ffce8a';ctx.font='bold 16px sans-serif';if(!state.numberAll)ctx.fillText('#'+(state.selectedCandleIndex+1),candle.x+width/2+5,Math.max(18,candle.wickTop-7));ctx.restore();
     }
     const selected = state.matches[state.selectedMatchIndex];
     if (selected) {
@@ -233,6 +234,30 @@
       }
       ctx.restore();
     }
+    if(state.numberAll)drawCandleNumbers(ctx,canvas);
+  }
+  function drawCandleNumbers(ctx,canvas) {
+    // Screen-sized labels, spaced around the wicks without moving candle geometry.
+    const scale=canvas.width/Math.max(1,canvas.getBoundingClientRect().width),font=11*scale,pad=3*scale,placed=[];
+    ctx.save();ctx.font=`600 ${font}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    for(let i=0;i<state.candles.length;i++){
+      const c=state.candles[i],text=String(i+1),w=ctx.measureText(text).width+pad*2,h=font+pad*2;
+      const x=Math.max(w/2,Math.min(canvas.width-w/2,c.x)),ideal=Math.max(h/2,Math.min(canvas.height-h/2,c.wickTop-h));
+      let best=null;
+      for(let y=h/2;y<=canvas.height-h/2;y+=h){
+        const box={x:x-w/2,y:y-h/2,w,h};
+        const collisions=placed.reduce((n,b)=>n+(box.x<b.x+b.w+pad&&box.x+w+pad>b.x&&box.y<b.y+b.h&&box.y+h>b.y?1:0),0);
+        const cost=collisions*canvas.height*2+Math.abs(y-ideal);
+        if(!best||cost<best.cost)best={...box,cost,cy:y};
+      }
+      if(!best)continue;
+      placed.push(best);
+      ctx.strokeStyle='rgba(192,202,214,.5)';ctx.lineWidth=scale;
+      ctx.beginPath();ctx.moveTo(c.x,c.wickTop);ctx.lineTo(x,best.cy+h/2);ctx.stroke();
+      ctx.fillStyle='rgba(16,21,27,.92)';ctx.fillRect(best.x,best.y,w,h);
+      ctx.fillStyle=i===state.selectedCandleIndex?'#ffce8a':'#e2e8ef';ctx.fillText(text,x,best.cy);
+    }
+    ctx.restore();
   }
   function updateCropLabel() { const c = state.crop; q('#screenshot-crop-label').textContent = c ? `Crop: x ${Math.round(c.x)}, y ${Math.round(c.y)}, ${Math.round(c.width)} × ${Math.round(c.height)} px` : ''; }
   function invalidateDetections() {
