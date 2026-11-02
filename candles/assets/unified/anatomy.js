@@ -1,4 +1,4 @@
-/* Learning interactions are display-only; source bars and detectors are untouched. */
+ 
 (() => {
   const labels={body:'Body',upper:'Upper wick',lower:'Lower wick',range:'Whole range'};
   const explanations={body:'The distance between open and close, regardless of candle color.',upper:'High minus the higher of open and close.',lower:'The lower of open and close minus low.',range:'High minus low: the full candle height, including both wicks.'};
@@ -68,13 +68,13 @@
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){pinned='';hovered='';pinnedTrigger=null;hoveredTrigger=null;paint();}});
   document.addEventListener('change',e=>{if(e.target.id==='learning-style'){teachingStyle=e.target.value;try{localStorage.setItem('pattern-teaching-style',teachingStyle);}catch{}applyStyle();}});
   document.addEventListener('input',e=>{if(e.target.matches('#lab-open,#lab-close'))updateLab();});
-  // One persistent builder, accessible from every route without taking up chart space.
+  
   const launch=document.createElement('button');launch.type='button';launch.id='open-candle-builder';launch.textContent='Build a candle';launch.setAttribute('aria-haspopup','dialog');launch.setAttribute('aria-controls','candle-builder-dialog');document.querySelector('.topbar').append(launch);
   const builder=document.createElement('dialog');builder.id='candle-builder-dialog';builder.setAttribute('aria-labelledby','candle-builder-title');builder.innerHTML='<div class="dialog-top"><strong id="candle-builder-title">Build a candle</strong><button type="button" id="close-candle-builder" aria-label="Close candle builder">Close ×</button></div>'+labMarkup();document.body.append(builder);builder.querySelector('.candle-lab').open=true;
   launch.onclick=()=>{builder.showModal();document.getElementById('lab-open').focus();};document.getElementById('close-candle-builder').onclick=()=>builder.close();
   builder.addEventListener('click',e=>{if(e.target===builder){const r=builder.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)builder.close();}});
   builder.addEventListener('close',()=>launch.focus({preventScroll:true}));updateLab();
-  // Only observe replaced chart/route containers, not text updates from interactions.
+  
   const observer=new MutationObserver(records=>{if(records.some(r=>r.target.id==='detail'||r.target.id==='chart'))enhance();});
   observer.observe(document.getElementById('detail'),{childList:true,subtree:true});
   document.addEventListener('change',e=>{if(e.target.id==='followthrough')syncPractice();});

@@ -105,9 +105,9 @@
           if (!band) { band = { top: run.y, bottom: run.y, left: run.left, right: run.right }; bands.push(band); }
           else { band.bottom = run.y; band.left = Math.min(band.left, run.left); band.right = Math.max(band.right, run.right); }
         }
-        // A colored annotation can cover part of a body without disconnecting it.
-        // Join only aligned bands from this same component when every missing
-        // row retains a broad body edge and the covering stroke extends outside.
+        
+        
+        
         const pixelAt=(x,y)=>{const i=((y+y0)*width+x+x0)*4;return [pixels[i],pixels[i+1],pixels[i+2]];};
         const colorDistance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
         function obscuredBodyGap(a,b){
@@ -146,8 +146,8 @@
           let wickTop = b.top, wickBottom = b.bottom;
           while (wickTop > 0 && hasNearCenter(wickTop - 1)) wickTop--;
           while (wickBottom + 1 < crop.height && hasNearCenter(wickBottom + 1)) wickBottom++;
-          // A thin, very wide component without vertical wick support is more consistent with
-          // a grid/indicator line than a candle body. This is an aspect check, not a width cap.
+          
+          
           if (bw > bh * 12 && wickTop === b.top && wickBottom === b.bottom) {
             warnings.push('A wide, unsupported horizontal colored feature was ignored; crop the chart area more tightly if it is a candle.');
             continue;
@@ -181,8 +181,8 @@
     }
 
     candidates.sort((a, b) => a.x - b.x || a.bodyTop - b.bodyTop);
-    // Body colors and wick colors are often different. Trace narrow vertical
-    // contrast against both local flanks, independently of the body-color mask.
+    
+    
     const rgb=(x,y)=>{const i=(y*width+x)*4;return [pixels[i],pixels[i+1],pixels[i+2]];};
     const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
     function traceWick(c,start,direction){
@@ -193,7 +193,7 @@
         for(let dx=-1;dx<=1;dx++){
           const x=c.x+dx,ink=rgb(x,y);
           if(distance(ink,left)<24||distance(ink,right)<24)continue;
-          // A horizontal grid/indicator stroke is not a narrow vertical wick.
+          
           const side=Math.max(2,Math.ceil(c.bodyWidth*.3));
           if(distance(ink,rgb(x-side,y))<18&&distance(ink,rgb(x+side,y))<18)continue;
           return true;
@@ -203,16 +203,16 @@
       function horizontalOcclusion(y,otherY){
         if(y<y0||y>=y1||otherY<y0||otherY>=y1||c.x-flank<x0||c.x+flank>=x1)return false;
         const ink=rgb(c.x,y),left=rgb(c.x-flank,y),right=rgb(c.x+flank,y);
-        // A colored horizontal stroke must span both sides and differ from
-        // the background just beyond it. Blank gaps are not inferred as ink.
+        
+        
         return distance(ink,left)<18&&distance(ink,right)<18&&
           distance(left,rgb(c.x-flank,otherY))>=24&&distance(right,rgb(c.x+flank,otherY))>=24;
       }
       let last=start,y=start+direction;
       while(y>=y0&&y<y1){
         if(supported(y)){last=y;y+=direction;continue;}
-        // One obscured/antialiased pixel is bridgeable only if the vertical
-        // stroke resumes for two pixels. Never extend into an unsupported tail.
+        
+        
         if(supported(y+direction)&&supported(y+2*direction)){last=y+2*direction;y+=3*direction;continue;}
         if(horizontalOcclusion(y,y-direction)&&horizontalOcclusion(y+direction,y+2*direction)&&
             supported(y+2*direction)&&supported(y+3*direction)){

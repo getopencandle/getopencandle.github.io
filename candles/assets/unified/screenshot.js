@@ -225,8 +225,8 @@
     const left=Number.isFinite(c.wickLeft)?c.wickLeft:c.x;
     const right=Number.isFinite(c.wickRight)?c.wickRight:left;
     const width=Math.max(1,right-left+1);
-    // Extracted bounds are inclusive pixel cells, not canvas path coordinates.
-    // Keep the wick outside the body so hollow candles remain hollow.
+    
+    
     if(c.wickTop<c.bodyTop)ctx.fillRect(left,c.wickTop,width,c.bodyTop-c.wickTop);
     if(c.wickBottom>c.bodyBottom)ctx.fillRect(left,c.bodyBottom+1,width,c.wickBottom-c.bodyBottom);
   }
@@ -262,7 +262,7 @@
     if(state.numberAll)drawCandleNumbers(ctx,canvas);
   }
   function drawCandleNumbers(ctx,canvas) {
-    // Screen-sized labels, spaced around the wicks without moving candle geometry.
+    
     const scale=canvas.width/Math.max(1,canvas.getBoundingClientRect().width),font=11*scale,pad=3*scale,placed=[];
     ctx.save();ctx.font=`600 ${font}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
     for(let i=0;i<state.candles.length;i++){

@@ -1,45 +1,41 @@
 /* OpenCandle recognition rules. Existing PolyForm Noncommercial license: LICENSE.txt. */
 (()=>{'use strict';
 const CB=(()=>{
-// Snapshot of user-owned OpenCandle implementation; see sources/own-code.json.
 
 
-/**
- * Candlestick pattern detection (original code).
- *
- * Each family is written from the standard textbook description of the pattern (Nison, "Japanese Candlestick Charting
- * Techniques"; Bulkowski, "Encyclopedia of Candlestick Charts"). Every numeric threshold below, the
- * trend rule wiring and the marker text are our own choice and exported so tests cite one place.
- *
- * Bar vocabulary: body = |close - open|, range = high - low, upper = high - max(open, close), lower = min(open, close) - low,
- * white = close > open, black = close < open. A bar with a missing or nonfinite price, or a zero range, never takes part in a
- * pattern. avgBody(i) is the mean body of the CANDLE_THRESHOLDS.averageBodyLength bars before bar i (bar i excluded);
- * a bar without a full window has no average, so patterns that need a long or small body are not reported there.
- */
+
+
+
 const CANDLE_THRESHOLDS=Object.freeze({
- /** A doji's body is at most this share of its range. */
+  
  dojiBody:0.05,
- /** A "small" or "missing" shadow is at most this share of the range. */
+  
  smallShadow:0.1,
- /** A hammer-type shadow is at least this many bodies long. */
+  
  longShadowBodies:2,
- /** Long lower or upper shadow: the shadow is at least this share of the range. */
+  
  longShadowRange:2/3,
- /** Bars in the average body window. */
+  
  averageBodyLength:14,
- /** A small (star or inside) body is at most this share of the average body. */
+  
  smallBody:0.5,
- /** Marubozu shadows are each at most this share of the range. */
+ 
+
+ shortBody:1,
+ 
+
+ abandonedPenetration:0.3,
+  
  marubozuShadow:0.05,
- /** Three white soldiers or black crows close (open) within this share of the range of the extreme. */
+  
  nearExtreme:0.25,
- /** Tweezer extremes and the on-neck close match within this share of the larger range. */
+  
  matchTolerance:0.05,
 });
 
 
-/** reversal: bullish needs a prior downtrend, bearish a prior uptrend. continuation: bullish needs an uptrend, bearish a
- *  downtrend. none: the trend rule does not apply (neutral families, and Kicking, which Nison treats as trend-free). Role per family. */
+
+
 
 
 const TREND_RULES                     =Object.freeze(['SMA50','SMA50, SMA200','No detection']);
@@ -52,7 +48,7 @@ const PATTERN_TYPES                       =Object.freeze(['Bullish','Bearish','B
 const finite=(value        )                =>typeof value==='number'&&Number.isFinite(value);
 const T=CANDLE_THRESHOLDS;
 
-/** Per-bar shape values, computed once per calculation. */
+ 
 class CandleMetrics {
           o         ;         h         ;         l         ;         c         ;         ok          ;         body         ;         range         ;         upper         ;         lower         ;         avgBody                ;
  constructor(bars               ){
@@ -65,13 +61,13 @@ class CandleMetrics {
   }
   const w=T.averageBodyLength;let sum=0,bad=0;
   for(let i=0;i<n;i++){
-   // window = bars i-w .. i-1
+   
    if(i>=1){const add=this.body[i-1];if(finite(add))sum+=add;else bad++;}
    if(i>w){const drop=this.body[i-1-w];if(finite(drop))sum-=drop;else bad--;}
    this.avgBody.push(i>=w&&bad===0?sum/w:null);
   }
  }
- /** All bars i-size+1 .. i are usable. */
+  
  usable(i       ,size       ){if(i-size+1<0)return false;for(let k=i-size+1;k<=i;k++)if(!this.ok[k])return false;return true;}
  white(i       ){return this.c[i]>this.o[i];}
  black(i       ){return this.c[i]<this.o[i];}
@@ -81,6 +77,7 @@ class CandleMetrics {
  doji(i       ){return this.body[i]<=T.dojiBody*this.range[i];}
  long(i       ){const avg=this.avgBody[i];return avg!==null&&avg>0&&this.body[i]>avg;}
  small(i       ){const avg=this.avgBody[i];return avg!==null&&avg>0&&this.body[i]<=T.smallBody*avg;}
+ short(i       ){const avg=this.avgBody[i];return avg!==null&&avg>0&&this.body[i]<=T.shortBody*avg;}
  marubozu(i       ){return this.long(i)&&this.upper[i]<=T.marubozuShadow*this.range[i]&&this.lower[i]<=T.marubozuShadow*this.range[i];}
 }
 
@@ -89,7 +86,7 @@ const insideBody=(k              ,i       ,outer       )=>k.top(i)<=k.top(outer)
 const soldier=(k              ,i       )=>k.white(i)&&k.long(i)&&k.upper[i]<=T.nearExtreme*k.range[i];
 const crow=(k              ,i       )=>k.black(i)&&k.long(i)&&k.lower[i]<=T.nearExtreme*k.range[i];
 
-/** Every family, keyed by id. Order is the "All candlestick patterns" marker order on a bar. */
+ 
 const CANDLE_FAMILIES                        =Object.freeze([
  {id:'doji',size:1,role:'none',definition:'Doji: body at most dojiBody of the range.',
   neutral:side('D','Doji',(k,i)=>k.doji(i))},
@@ -105,14 +102,14 @@ const CANDLE_FAMILIES                        =Object.freeze([
  {id:'engulfing',size:2,role:'reversal',definition:'The second real body covers the first and is larger: bullish = black then white with open <= prior close and close >= prior open; bearish mirrors it.',
   bullish:side('EG','Bullish engulfing',(k,i)=>k.black(i-1)&&k.white(i)&&k.o[i]<=k.c[i-1]&&k.c[i]>=k.o[i-1]&&k.body[i]>k.body[i-1]),
   bearish:side('EG','Bearish engulfing',(k,i)=>k.white(i-1)&&k.black(i)&&k.o[i]>=k.c[i-1]&&k.c[i]<=k.o[i-1]&&k.body[i]>k.body[i-1])},
- {id:'harami',size:2,role:'reversal',definition:'A long first body, then a smaller non-doji body of either color inside it (Nison). The first body color gives the direction (black = bullish).',
-  bullish:side('HR','Bullish harami',(k,i)=>k.black(i-1)&&k.long(i-1)&&!k.doji(i)&&insideBody(k,i,i-1)&&k.body[i]<k.body[i-1]),
-  bearish:side('HR','Bearish harami',(k,i)=>k.white(i-1)&&k.long(i-1)&&!k.doji(i)&&insideBody(k,i,i-1)&&k.body[i]<k.body[i-1])},
+ {id:'harami',size:2,role:'reversal',definition:'A long first body, then a small non-doji body of either color inside it (Nison: a small real body; here at most shortBody of the average body, as TA-Lib BodyShort). The first body color gives the direction (black = bullish).',
+  bullish:side('HR','Bullish harami',(k,i)=>k.black(i-1)&&k.long(i-1)&&!k.doji(i)&&k.short(i)&&insideBody(k,i,i-1)&&k.body[i]<k.body[i-1]),
+  bearish:side('HR','Bearish harami',(k,i)=>k.white(i-1)&&k.long(i-1)&&!k.doji(i)&&k.short(i)&&insideBody(k,i,i-1)&&k.body[i]<k.body[i-1])},
  {id:'haramicross',size:2,role:'reversal',definition:'A long first body, then a doji whose body lies inside it. The first body\'s color gives the direction (black = bullish).',
   bullish:side('HC','Bullish harami cross',(k,i)=>k.black(i-1)&&k.long(i-1)&&k.doji(i)&&insideBody(k,i,i-1)),
   bearish:side('HC','Bearish harami cross',(k,i)=>k.white(i-1)&&k.long(i-1)&&k.doji(i)&&insideBody(k,i,i-1))},
- // Nison (Japanese Candlestick Charting Techniques, "Dark-cloud cover" and "Piercing pattern"): the second session opens
- // above the prior session's HIGH (dark cloud) or below its LOW (piercing), not merely beyond its close.
+ 
+ 
  {id:'piercing',size:2,role:'reversal',definition:'Piercing: a long black body, then a white body opening below its low and closing above its midpoint but below its open. Dark cloud cover mirrors it (opening above the prior high).',
   bullish:side('PL','Piercing',(k,i)=>k.black(i-1)&&k.long(i-1)&&k.white(i)&&k.o[i]<k.l[i-1]&&k.c[i]>k.mid(i-1)&&k.c[i]<k.o[i-1]),
   bearish:side('DC','Dark cloud cover',(k,i)=>k.white(i-1)&&k.long(i-1)&&k.black(i)&&k.o[i]>k.h[i-1]&&k.c[i]<k.mid(i-1)&&k.c[i]>k.o[i-1])},
@@ -125,15 +122,18 @@ const CANDLE_FAMILIES                        =Object.freeze([
  {id:'dojistar3',size:3,role:'reversal',definition:'Morning Doji star and Evening Doji star: the star pattern with a doji as the middle bar.',
   bullish:side('MDS','Morning Doji star',(k,i)=>k.black(i-2)&&k.long(i-2)&&k.doji(i-1)&&k.top(i-1)<k.c[i-2]&&k.white(i)&&k.c[i]>k.mid(i-2)),
   bearish:side('EDS','Evening Doji star',(k,i)=>k.white(i-2)&&k.long(i-2)&&k.doji(i-1)&&k.bottom(i-1)>k.c[i-2]&&k.black(i)&&k.c[i]<k.mid(i-2))},
- {id:'abandoned',size:3,role:'reversal',definition:'A doji whose whole range gaps away from both neighbours: black, gap-down doji, gap-up white = bullish; the mirror is bearish.',
-  bullish:side('AB','Bullish abandoned baby',(k,i)=>k.black(i-2)&&k.doji(i-1)&&k.h[i-1]<k.l[i-2]&&k.white(i)&&k.l[i]>k.h[i-1]),
-  bearish:side('AB','Bearish abandoned baby',(k,i)=>k.white(i-2)&&k.doji(i-1)&&k.l[i-1]>k.h[i-2]&&k.black(i)&&k.h[i]<k.l[i-1])},
+ 
+ 
+ 
+ {id:'abandoned',size:3,role:'reversal',definition:'A long body, a doji whose whole range gaps away from both neighbours, then an opposite body that is not small and closes at least abandonedPenetration into the first body: long black, gap-down doji, gap-up white = bullish; the mirror is bearish.',
+  bullish:side('AB','Bullish abandoned baby',(k,i)=>k.black(i-2)&&k.long(i-2)&&k.doji(i-1)&&k.h[i-1]<k.l[i-2]&&k.white(i)&&!k.small(i)&&k.l[i]>k.h[i-1]&&k.c[i]>k.c[i-2]+T.abandonedPenetration*k.body[i-2]),
+  bearish:side('AB','Bearish abandoned baby',(k,i)=>k.white(i-2)&&k.long(i-2)&&k.doji(i-1)&&k.l[i-1]>k.h[i-2]&&k.black(i)&&!k.small(i)&&k.h[i]<k.l[i-1]&&k.c[i]<k.c[i-2]-T.abandonedPenetration*k.body[i-2])},
  {id:'soldiers',size:3,role:'reversal',definition:'Three long white bodies, each closing higher, each opening inside the prior body, each with an upper shadow at most nearExtreme of its range. Three black crows mirror it.',
   bullish:side('3WS','Three white soldiers',(k,i)=>[i-2,i-1,i].every(j=>soldier(k,j))&&k.c[i-1]>k.c[i-2]&&k.c[i]>k.c[i-1]&&k.o[i-1]>k.o[i-2]&&k.o[i-1]<=k.c[i-2]&&k.o[i]>k.o[i-1]&&k.o[i]<=k.c[i-1]),
   bearish:side('3BC','Three black crows',(k,i)=>[i-2,i-1,i].every(j=>crow(k,j))&&k.c[i-1]<k.c[i-2]&&k.c[i]<k.c[i-1]&&k.o[i-1]<k.o[i-2]&&k.o[i-1]>=k.c[i-2]&&k.o[i]<k.o[i-1]&&k.o[i]>=k.c[i-1])},
- // Nison ("Tweezers tops and bottoms"): matching highs or lows of two or more lines, made of real bodies, shadows or
- // doji; colour is not part of the definition, so no colour is required here. The trend rule supplies the "after a rally /
- // decline" context.
+ 
+ 
+ 
  {id:'tweezer',size:2,role:'reversal',definition:'Tweezer bottom: two bars whose lows are equal within matchTolerance of the larger range. Tweezer top: two bars with equal highs. Colour is not required.',
   bullish:side('TB','Tweezer bottom',(k,i)=>Math.abs(k.l[i]-k.l[i-1])<=T.matchTolerance*Math.max(k.range[i],k.range[i-1])),
   bearish:side('TT','Tweezer top',(k,i)=>Math.abs(k.h[i]-k.h[i-1])<=T.matchTolerance*Math.max(k.range[i],k.range[i-1]))},
@@ -144,14 +144,14 @@ const CANDLE_FAMILIES                        =Object.freeze([
   neutral:side('STW','Spinning top white',(k,i)=>k.white(i)&&!k.doji(i)&&k.upper[i]>k.body[i]&&k.lower[i]>k.body[i])},
  {id:'spinblack',size:1,role:'none',definition:'Spinning top black: a black non-doji body smaller than each of its shadows.',
   neutral:side('STB','Spinning top black',(k,i)=>k.black(i)&&!k.doji(i)&&k.upper[i]>k.body[i]&&k.lower[i]>k.body[i])},
- // Nison (Beyond Candlesticks, "Kicker"): the gap between opposite marubozu is decisive whatever the prior trend, so the
- // family is not trend-gated (role none). Saved instances may still carry the old trendRule input (retired, ignored).
+ 
+ 
  {id:'kicking',size:2,role:'none',definition:'Two marubozu of opposite color with a gap between their ranges: black then gap-up white = bullish; white then gap-down black = bearish. The prior trend is not required.',
   bullish:side('K','Bullish kicking',(k,i)=>k.black(i-1)&&k.marubozu(i-1)&&k.white(i)&&k.marubozu(i)&&k.l[i]>k.h[i-1]),
   bearish:side('K','Bearish kicking',(k,i)=>k.white(i-1)&&k.marubozu(i-1)&&k.black(i)&&k.marubozu(i)&&k.h[i]<k.l[i-1])},
- {id:'threemethods',size:5,role:'continuation',definition:'Rising three methods: a long white bar, three bars with smaller bodies inside its range, then a long white bar closing above the first close. Falling three methods mirrors it.',
-  bullish:side('R3M','Rising three methods',(k,i)=>k.white(i-4)&&k.long(i-4)&&[i-3,i-2,i-1].every(j=>k.h[j]<=k.h[i-4]&&k.l[j]>=k.l[i-4]&&k.body[j]<k.body[i-4])&&k.white(i)&&k.long(i)&&k.c[i]>k.c[i-4]),
-  bearish:side('F3M','Falling three methods',(k,i)=>k.black(i-4)&&k.long(i-4)&&[i-3,i-2,i-1].every(j=>k.h[j]<=k.h[i-4]&&k.l[j]>=k.l[i-4]&&k.body[j]<k.body[i-4])&&k.black(i)&&k.long(i)&&k.c[i]<k.c[i-4])},
+ {id:'threemethods',size:5,role:'continuation',definition:'Rising three methods: a long white bar, three bars with small real bodies (Nison; here at most shortBody of the average body, as TA-Lib BodyShort, and smaller than the first body) inside its range, then a long white bar closing above the first close. Falling three methods mirrors it.',
+  bullish:side('R3M','Rising three methods',(k,i)=>k.white(i-4)&&k.long(i-4)&&[i-3,i-2,i-1].every(j=>k.h[j]<=k.h[i-4]&&k.l[j]>=k.l[i-4]&&k.short(j)&&k.body[j]<k.body[i-4])&&k.white(i)&&k.long(i)&&k.c[i]>k.c[i-4]),
+  bearish:side('F3M','Falling three methods',(k,i)=>k.black(i-4)&&k.long(i-4)&&[i-3,i-2,i-1].every(j=>k.h[j]<=k.h[i-4]&&k.l[j]>=k.l[i-4]&&k.short(j)&&k.body[j]<k.body[i-4])&&k.black(i)&&k.long(i)&&k.c[i]<k.c[i-4])},
  {id:'tristar',size:3,role:'reversal',definition:'Three dojis whose middle body gaps below both neighbours (bullish) or above both (bearish).',
   bullish:side('TS','Bullish tri-star',(k,i)=>k.doji(i-2)&&k.doji(i-1)&&k.doji(i)&&k.top(i-1)<k.bottom(i-2)&&k.top(i-1)<k.bottom(i)),
   bearish:side('TS','Bearish tri-star',(k,i)=>k.doji(i-2)&&k.doji(i-1)&&k.doji(i)&&k.bottom(i-1)>k.top(i-2)&&k.bottom(i-1)>k.top(i))},
@@ -169,9 +169,8 @@ const CANDLE_FAMILIES                        =Object.freeze([
 ]                  );
 const candleFamily=(id       )             =>{const row=CANDLE_FAMILIES.find(family=>family.id===id);if(!row)throw new Error('Unknown candlestick family.');return row;};
 
-/** Trend at each bar from the close and the trend rule (our own wiring of the rule names):
- *  SMA50: up when close > SMA50, down when close < SMA50. SMA50, SMA200: up when close > SMA50 > SMA200, down when
- *  close < SMA50 < SMA200. No detection: both. A bar without the averages has no trend. */
+
+
 function trendStates(bars               ,rule          ,sma                                                               )                              {
  if(rule==='No detection')return {up:bars.map(()=>true),down:bars.map(()=>true)};
  const close=bars.map(bar=>finite(bar.close)?bar.close:null),fast=sma(close,50),slow=rule==='SMA50, SMA200'?sma(close,200):null;
@@ -185,9 +184,8 @@ function trendStates(bars               ,rule          ,sma                     
 }
 
 
-/** Hits of one family on every bar. `trend` gates the directional sides by the family role, read on the bar before the
- *  pattern's first bar (: "preceded by a trend"); the first bars without a prior bar have no trend unless the rule
- *  is No detection. `types` selects the directional sides; neutral sides are always reported. */
+
+
 function detectCandleFamily(k              ,family             ,trend                              ,types                                  ,noDetection        )            {
  const out            =[];const n=k.c.length;
  const trendOk=(direction                    ,i       )=>{
@@ -207,27 +205,11 @@ function detectCandleFamily(k              ,family             ,trend           
 
 return {CandleMetrics,trendStates,CANDLE_FAMILIES,CANDLE_THRESHOLDS};})();
 const GB=(()=>{
-// Snapshot of user-owned OpenCandle implementation; see sources/own-code.json.
 
 
-/**
- * Chart pattern detection (original code, every rule).
- *
- * The detection below is OpenCandle's own, written from the usual textbook shapes (Bulkowski, "Encyclopedia of Chart
- * Patterns").
- * Flags, pennants and cup and handle are reasoned from the public description of those shapes (a sharp pole
- * then a small parallel or converging consolidation; a rounded bowl between two equal rims, then a short shallow handle).
- *
- * Pivots: bar j is a pivot high when its high is above every high of the `pivotLength` bars before it and at least every
- * high of the `pivotLength` bars after it (pivot low mirrors it with lows). A pivot is known only on its confirmation bar
- * j + pivotLength, so detection is causal: nothing is reported before the bar that completes it, and later bars never
- * change an earlier report. Pivots form an alternating zigzag; a second pivot of the same kind replaces the first when it
- * is more extreme, else it is ignored.
- *
- * Each time a pivot is appended, the newest pivots are tested against every enabled pattern. `tolerance` (percent) is the
- * largest relative difference for two levels to count as equal and the smallest relative move for a level to count as
- * rising, falling or clearly lower or higher.
- */
+
+
+
 
 
 
@@ -242,12 +224,12 @@ const CHART_PATTERNS                            =Object.freeze([
  {id:'rectangle',name:'Rectangle',direction:'neutral',rule:'Last two highs equal within tolerance and last two lows equal within tolerance, the lows below the highs by more than tolerance.'},
  {id:'risingwedge',name:'Rising wedge',direction:'bearish',rule:'Last two highs and lows both rising by more than tolerance, lows rising faster (the width narrows).'},
  {id:'fallingwedge',name:'Falling wedge',direction:'bullish',rule:'Last two highs and lows both falling by more than tolerance, highs falling faster (the width narrows).'},
- // Flags and pennants: five pivots, the pole (low then high for bullish) and a two-high, two-low consolidation.
+ 
  {id:'bullflag',name:'Bullish flag',direction:'bullish',rule:'Five pivots low, high, low, high, low: the pole (first low to first high) rises by more than 3 x tolerance; both later lows stay above the pole midpoint; the flag highs and lows are each flat or falling (neither rises by more than tolerance) and the second high-low width is at least half the first (parallel, not converging).'},
  {id:'bearflag',name:'Bearish flag',direction:'bearish',rule:'The mirror of Bullish flag: a falling pole (high to low) of more than 3 x tolerance, both later highs below the pole midpoint, the flag highs and lows each flat or rising, the second width at least half the first.'},
  {id:'bullpennant',name:'Bullish pennant',direction:'bullish',rule:'The Bullish flag pole and midpoint rules, but the consolidation converges: the second high falls and the second low rises, each by more than tolerance.'},
  {id:'bearpennant',name:'Bearish pennant',direction:'bearish',rule:'The Bearish flag pole and midpoint rules, but the consolidation converges: the second high falls and the second low rises, each by more than tolerance.'},
- // Cups: four pivots, rim, bottom, rim, handle.
+ 
  {id:'cuphandle',name:'Cup and handle',direction:'bullish',rule:'Four pivots high, low, high, low: the two rims (highs) equal within tolerance, the bottom below the lower rim by more than tolerance; the cup is rounded (at least 40% of the bars from rim to rim have their low in the bottom quarter of the cup depth, a V gives about 25%); the handle low stays above the cup midpoint, and the handle (right rim to handle low) lasts at most half as many bars as the cup.'},
  {id:'invcuphandle',name:'Inverted cup and handle',direction:'bearish',rule:'The mirror of Cup and handle on lows: two equal low rims, a rounded dome (at least 40% of the bars with their high in the top quarter), a handle high below the dome midpoint, lasting at most half the dome.'},
 ]                      );
@@ -258,8 +240,8 @@ const chartPatternInfo=(id               )                 =>CHART_PATTERNS.find
 
 const finite=(value        )                =>typeof value==='number'&&Number.isFinite(value);
 
-/** Accepted pivot events in confirmation order: a new pivot, or a more extreme pivot of the same kind that replaces the
- *  last one (`replaces` true). Each carries the bar that confirmed it. */
+
+
 function zigzagEvents(bars               ,length       )                                                   {
  const out                                                   =[];let last           =null;
  for(let i=2*length;i<bars.length;i++){
@@ -277,19 +259,19 @@ function zigzagEvents(bars               ,length       )                        
  }
  return out;
 }
-/** The final alternating zigzag (after replacements). */
+ 
 function zigzagPivots(bars               ,length       )        {
  const out        =[];for(const event of zigzagEvents(bars,length)){const pivot={index:event.index,price:event.price,kind:event.kind};if(event.replaces)out[out.length-1]=pivot;else out.push(pivot);}return out;
 }
 
 const equal=(a       ,b       ,tol       )=>Math.abs(a-b)<=tol*Math.max(Math.abs(a),Math.abs(b));
 const segment=(a      ,b      )=>({from:{index:a.index,price:a.price},to:{index:b.index,price:b.price}});
-/** The line through a and b, continued to bar `at`. */
+ 
 const extended=(a      ,b      ,at       )=>{const slope=b.index===a.index?0:(b.price-a.price)/(b.index-a.index);return {from:{index:a.index,price:a.price},to:{index:at,price:b.price+slope*(at-b.index)}};};
 
-/** The share of cup bars that must sit in the cup's extreme quarter for it to count as rounded. */
+ 
 const CUP_ROUND_SHARE=0.4;
-/** Share of bars a..c (inclusive) whose low (top: high) is within a quarter of the depth from the bottom (top) price. */
+ 
 function roundShare(bars               ,a       ,c       ,bottom       ,depth       ,top        )            {
  let near=0;for(let k=a;k<=c;k++){const value=top?bars[k].high:bars[k].low;if(!finite(value))return null;if(top?value>=bottom-depth/4:value<=bottom+depth/4)near++;}
  return near/(c-a+1);
@@ -321,7 +303,7 @@ function test(id               ,p                 ,tol       ,at       ,bars    
   return hit(q,[...zigzag(q),extended(t1,t2,at)]);
  }
  if(id==='bullflag'||id==='bearflag'||id==='bullpennant'||id==='bearpennant'){
-  // Pole p0-e1, then the consolidation e1, r1, e2, r2 (e = pole-end side, r = retrace side).
+  
   if(n<5)return null;const q=p.slice(n-5),bull=id==='bullflag'||id==='bullpennant';if(last.kind!==(bull?'low':'high'))return null;
   const [p0,e1,r1,e2,r2]=q,pole=e1.price-p0.price,mid=p0.price+pole/2;
   if(!(bull?pole>3*tol*Math.abs(p0.price):-pole>3*tol*Math.abs(p0.price)))return null;
@@ -334,7 +316,7 @@ function test(id               ,p                 ,tol       ,at       ,bars    
   return hit(q,[segment(p0,e1),extended(h1,h2,at),extended(l1,l2,at)]);
  }
  if(id==='cuphandle'||id==='invcuphandle'){
-  // Rim a, bottom b, rim c, handle d.
+  
   if(n<4)return null;const q=p.slice(n-4),cup=id==='cuphandle';if(last.kind!==(cup?'low':'high'))return null;
   const [a,b,c,d]=q;if(!equal(a.price,c.price,tol))return null;
   const rim=cup?Math.min(a.price,c.price):Math.max(a.price,c.price),depth=cup?rim-b.price:b.price-rim;
@@ -344,7 +326,7 @@ function test(id               ,p                 ,tol       ,at       ,bars    
   const share=roundShare(bars,a.index,c.index,b.price,depth,!cup);if(share===null||share<CUP_ROUND_SHARE)return null;
   return hit(q,[...zigzag(q),extended(a,c,at)]);
  }
- // Four-pivot shapes: the last two highs and the last two lows.
+ 
  if(n<4)return null;const q=p.slice(n-4),highs=q.filter(row=>row.kind==='high'),lows=q.filter(row=>row.kind==='low');
  if(highs.length!==2||lows.length!==2)return null;
  const [h1,h2]=highs,[l1,l2]=lows,dh=(h2.price-h1.price)/Math.abs(h1.price),dl=(l2.price-l1.price)/Math.abs(l1.price);
@@ -359,24 +341,23 @@ function test(id               ,p                 ,tol       ,at       ,bars    
  return hit(q,[extended(h1,h2,at),extended(l1,l2,at)]);
 }
 
-/** Patterns with a breakout level (Bulkowski: a top is confirmed by a close below the valley or neckline, a bottom by a close
- *  above the peak or neckline). The other shapes are reported unconfirmed (on their last pivot) in both modes. */
+
+
 const BREAKOUT_PATTERNS                            =new Set                (['doubletop','doublebottom','tripletop','triplebottom','headshoulders','invheadshoulders']);
 
-/** The breakout rule of a found breakout pattern: the level a close must cross at bar k, the extreme a close must not pass
- *  first (the pattern's highest high for a top, lowest low for a bottom: past it the shape is void) and the window. */
+
+
 function breakoutRule(hit                )                                                                    {
  const p=hit.pivots,top=hit.direction==='bearish',window=p[p.length-1].index-p[0].index;
  const extreme=top?Math.max(...p.filter(row=>row.kind==='high').map(row=>row.price)):Math.min(...p.filter(row=>row.kind==='low').map(row=>row.price));
  if(hit.id==='doubletop'||hit.id==='doublebottom'){const level=p[1].price;return {top,level:()=>level,invalid:extreme,window};}
  if(hit.id==='tripletop'||hit.id==='triplebottom'){const level=top?Math.min(p[1].price,p[3].price):Math.max(p[1].price,p[3].price);return {top,level:()=>level,invalid:extreme,window};}
- // Head and shoulders: the neckline through the two troughs (peaks), continued.
+ 
  const [a,b]=[p[1],p[3]],slope=b.index===a.index?0:(b.price-a.price)/(b.index-a.index);
  return {top,level:k=>b.price+slope*(k-b.index),invalid:extreme,window};
 }
-/** The breakout bar of a breakout pattern, or null: the first bar after the last pivot whose close crosses the level, within
- *  `window` bars (the pattern's own width, an OpenCandle choice) and before any close past the pattern's extreme. Reported
- *  no earlier than the bar the pattern became known (`confirmedAt`). Reads only bars up to the bar it returns. */
+
+
 function breakoutBar(bars               ,hit                )            {
  const rule=breakoutRule(hit),last=hit.pivots[hit.pivots.length-1].index,end=Math.min(bars.length-1,last+rule.window);
  for(let k=last+1;k<=end;k++){
@@ -386,8 +367,8 @@ function breakoutBar(bars               ,hit                )            {
  }
  return null;
 }
-/** Every hit of the chosen patterns, in reporting-bar order. tolerancePercent is a percent (2 = 2%). With
- *  options.breakout a breakout pattern is reported on its breakout bar (confirmedAt) or not at all. */
+
+
 function detectChartPatterns(bars               ,ids                          ,pivotLength       ,tolerancePercent       ,options                    ={})                  {
  const tol=tolerancePercent/100,out                  =[],seen        =[];
  for(const event of zigzagEvents(bars,pivotLength)){
@@ -400,14 +381,14 @@ function detectChartPatterns(bars               ,ids                          ,p
    out.push(test(id,found.pivots,tol,at,bars) );
   }
  }
- // Breakouts can arrive after later pivots; a stable sort keeps the pivot order within one bar.
+ 
  return options.breakout?out.map((hit,order)=>({hit,order})).sort((a,b)=>a.hit.confirmedAt-b.hit.confirmedAt||a.order-b.order).map(row=>row.hit):out;
 }
 
 return {CHART_PATTERNS,BREAKOUT_PATTERNS,detectChartPatterns};})();
 const D=(({CANDLE_FAMILIES,CANDLE_THRESHOLDS})=>{
 
-const RULE_VERSION='oc-independent-1.0.0';
+const RULE_VERSION='oc-independent-1.1.0';
 const PROFILE=Object.freeze({
   ...CANDLE_THRESHOLDS,
   nearFraction:0.05,
@@ -584,8 +565,8 @@ function trendPass(def,trend,start,disabled){
   const at=start-1;if(at<0)return false;
   return def.trendPolicy==='up'?trend.up[at]:trend.down[at];
 }
-// Stable non-cryptographic identifiers, usable unchanged in a browser or Node.
-// Artifact integrity uses SHA-256 in the separate corpus builder.
+
+
 const hash=value=>{
   const text=JSON.stringify(value);let a=0x811c9dc5,b=0x9e3779b9,c=0x85ebca6b,d=0xc2b2ae35;
   for(let i=0;i<text.length;i++){const n=text.charCodeAt(i);a=Math.imul(a^n,0x01000193);b=Math.imul(b^n,0x85ebca6b);c=Math.imul(c^n,0xc2b2ae35);d=Math.imul(d^n,0x27d4eb2f);}
@@ -643,7 +624,7 @@ function scanCharts(bars,options={}){
 
 return {scanCandles,scanCharts,validateBars};})(CB,GB,D);
 const G=((validateBars)=>{
-// Original research implementation. Frozen candlestick detectors are not modified.
+
 const CHART_RESEARCH_VERSION='oc-chart-research-0.2.0';
 const GAP_PROFILE=Object.freeze({trendLength:50,minIslandBars:1,maxIslandBars:null,gapComparison:'strict_positive_price_interval',islandSelection:'longest',confirmation:'completed_exit_bar',priceBasis:'caller_supplied_consistent_OHLC',sessionPolicy:'caller_must_supply_contiguous_valid_sessions_and_split_at_corporate_actions'});
 const GAP_DEFINITIONS=Object.freeze([
@@ -663,7 +644,7 @@ function scanGapPatterns(bars,options={}){
  if(parameters.maxIslandBars!==null&&(!Number.isSafeInteger(parameters.maxIslandBars)||parameters.maxIslandBars<parameters.minIslandBars))throw new RangeError('maxIslandBars must be null or a safe integer at least minIslandBars');
  if(!['longest','all'].includes(parameters.islandSelection))throw new RangeError('islandSelection must be longest or all');
  const CONFIG_ID=hash([CHART_RESEARCH_VERSION,parameters]);
- // One rolling mean per possible start; island price envelopes update incrementally.
+ 
  const priorMeans=new Array(bars.length).fill(null);let closeSum=0;
  for(let start=0;start<bars.length;start++){if(start>=GAP_PROFILE.trendLength)priorMeans[start]=closeSum/GAP_PROFILE.trendLength;closeSum+=bars[start].close;if(start>=GAP_PROFILE.trendLength)closeSum-=bars[start-GAP_PROFILE.trendLength].close;}
  const definitions=new Map(GAP_DEFINITIONS.map(d=>[d.id,d]));
@@ -685,7 +666,7 @@ function scanGapPatterns(bars,options={}){
    const earliest=parameters.maxIslandBars===null?GAP_PROFILE.trendLength:Math.max(GAP_PROFILE.trendLength,i-parameters.maxIslandBars);
    for(let start=i-1;start>=earliest;start--){
     low=Math.min(low,bars[start].low);high=Math.max(high,bars[start].high);
-    // Earlier candles only widen the cluster; a touched exit boundary can never recover.
+    
     if(top?low<=current.high:high>=current.low)break;
     if(i-start<parameters.minIslandBars)continue;
     const prior=bars[start-1],mean=priorMeans[start];
@@ -703,7 +684,7 @@ function scanGapPatterns(bars,options={}){
 
 return {GAP_DEFINITIONS,GAP_PROFILE,scanGapPatterns};})(E.validateBars);
 const P=((validateBars)=>{
-// Original causal geometry research implementation. No existing detector is changed.
+
 const GEOMETRY_VERSION='oc-chart-research-0.2.0';
 const GEOMETRY_PROFILE=Object.freeze({pivotRadius:2,pivotCount:6,minSpanBars:15,maxSpanBars:null,priceTolerance:0.005,minWidthFraction:0.02,minContraction:0.20,maxChannelWidthDrift:0.15,candidateStrategy:'latest_confirmed_alternating_pivots'});
 const names={ascendingtriangle:'Ascending triangle',descendingtriangle:'Descending triangle',symmetricaltriangle:'Symmetrical triangle',ascendingchannel:'Ascending channel',descendingchannel:'Descending channel',horizontalchannel:'Horizontal channel'};
@@ -734,7 +715,7 @@ function classify(bars,pivots,known,p){
  if(highs.some(v=>Math.abs(v.price-at(upper,v.index))>tolerance)||lows.some(v=>Math.abs(v.price-at(lower,v.index))>tolerance))return null;
  const initialWidth=at(upper,first)-at(lower,first),finalWidth=at(upper,last)-at(lower,last),knownWidth=at(upper,known)-at(lower,known);
  if(initialWidth<scale*p.minWidthFraction||finalWidth<scale*p.minWidthFraction||knownWidth<scale*p.minWidthFraction)return null;
- // Reject bars outside the fitted formation, including the two bars needed to confirm its final pivot.
+ 
  for(let i=first;i<=known;i++)if(bars[i].high>at(upper,i)+tolerance||bars[i].low<at(lower,i)-tolerance)return null;
  const highChange=upper.slope*span,lowChange=lower.slope*span;
  const highFlat=Math.abs(highChange)<=tolerance,lowFlat=Math.abs(lowChange)<=tolerance;
@@ -763,7 +744,7 @@ function scanGeometryPatterns(bars,options={}){
  for(let known=radius*2;known<bars.length;known++){
   const index=known-radius;let high=true,low=true;
   for(let k=index-radius;k<=known;k++)if(k!==index){if(bars[k].high>=bars[index].high)high=false;if(bars[k].low<=bars[index].low)low=false;}
-  // Outside bars can be both extrema. Their intrabar order is unknown, so neither is used.
+  
   if(high===low)continue;
   const kind=high?'high':'low',price=high?bars[index].high:bars[index].low,pivot={index,price,kind,confirmedAt:known},previous=pivots.at(-1);
   if(previous?.kind===kind){if(kind==='high'?price<=previous.price:price>=previous.price)continue;pivots[pivots.length-1]=pivot;}else pivots.push(pivot);
@@ -786,7 +767,7 @@ const definitions=[...GAP_DEFINITIONS,...GEOMETRY_DEFINITIONS];
 if(new Set(definitions.map(d=>d.id)).size!==definitions.length)throw Error('Duplicate research definition IDs');
 function listResearchDefinitions(){return definitions.map(d=>structuredClone(d));}
 
-/** Separately versioned candidate engine. It does not inherit the candle-study results. */
+ 
 function scanResearchCharts(bars,options={}){
  if(!options||typeof options!=='object'||Array.isArray(options))throw new TypeError('options must be an object');
  for(const key of Object.keys(options))if(!['datasetId','symbol','timeframe','patternIds','gapOptions','geometryProfile'].includes(key))throw new RangeError('Unknown research option: '+key);
