@@ -2,7 +2,7 @@
 (()=>{'use strict';
 const CB=(()=>{
 // Snapshot of user-owned OpenCandle implementation; see sources/own-code.json.
-                                                
+
 
 /**
  * Candlestick pattern detection (original code).
@@ -37,17 +37,17 @@ const CANDLE_THRESHOLDS=Object.freeze({
  matchTolerance:0.05,
 });
 
-                                                          
+
 /** reversal: bullish needs a prior downtrend, bearish a prior uptrend. continuation: bullish needs an uptrend, bearish a
  *  downtrend. none: the trend rule does not apply (neutral families, and Kicking, which Nison treats as trend-free). Role per family. */
-                                                             
-                                                             
+
+
 const TREND_RULES                     =Object.freeze(['SMA50','SMA50, SMA200','No detection']);
-                                                   
+
 const PATTERN_TYPES                       =Object.freeze(['Bullish','Bearish','Both']);
 
-                                                                                            
-                                                                                                                                                        
+
+
 
 const finite=(value        )                =>typeof value==='number'&&Number.isFinite(value);
 const T=CANDLE_THRESHOLDS;
@@ -184,7 +184,7 @@ function trendStates(bars               ,rule          ,sma                     
  return {up,down};
 }
 
-                                                                                                         
+
 /** Hits of one family on every bar. `trend` gates the directional sides by the family role, read on the bar before the
  *  pattern's first bar (: "preceded by a trend"); the first bars without a prior bar have no trend unless the rule
  *  is No detection. `types` selects the directional sides; neutral sides are always reported. */
@@ -208,7 +208,7 @@ function detectCandleFamily(k              ,family             ,trend           
 return {CandleMetrics,trendStates,CANDLE_FAMILIES,CANDLE_THRESHOLDS};})();
 const GB=(()=>{
 // Snapshot of user-owned OpenCandle implementation; see sources/own-code.json.
-                                  
+
 
 /**
  * Chart pattern detection (original code, every rule).
@@ -228,9 +228,9 @@ const GB=(()=>{
  * largest relative difference for two levels to count as equal and the smallest relative move for a level to count as
  * rising, falling or clearly lower or higher.
  */
-                                                                                                                                                                                                                                                     
-                                                         
-                                                                                                      
+
+
+
 const CHART_PATTERNS                            =Object.freeze([
  {id:'doubletop',name:'Double top',direction:'bearish',rule:'High, low, high: the two highs equal within tolerance, the low below the lower high by more than tolerance.'},
  {id:'doublebottom',name:'Double bottom',direction:'bullish',rule:'Low, high, low: the two lows equal within tolerance, the high above the higher low by more than tolerance.'},
@@ -253,8 +253,8 @@ const CHART_PATTERNS                            =Object.freeze([
 ]                      );
 const chartPatternInfo=(id               )                 =>CHART_PATTERNS.find(row=>row.id===id) ;
 
-                                                                    
-                                                                                                                                                                                                                                                                                                                                                                                           
+
+
 
 const finite=(value        )                =>typeof value==='number'&&Number.isFinite(value);
 
@@ -362,7 +362,7 @@ function test(id               ,p                 ,tol       ,at       ,bars    
 /** Patterns with a breakout level (Bulkowski: a top is confirmed by a close below the valley or neckline, a bottom by a close
  *  above the peak or neckline). The other shapes are reported unconfirmed (on their last pivot) in both modes. */
 const BREAKOUT_PATTERNS                            =new Set                (['doubletop','doublebottom','tripletop','triplebottom','headshoulders','invheadshoulders']);
-                                                                                                                                                              
+
 /** The breakout rule of a found breakout pattern: the level a close must cross at bar k, the extreme a close must not pass
  *  first (the pattern's highest high for a top, lowest low for a bottom: past it the shape is void) and the window. */
 function breakoutRule(hit                )                                                                    {
